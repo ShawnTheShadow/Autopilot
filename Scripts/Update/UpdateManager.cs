@@ -20,6 +20,7 @@ using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using Rynchodon.Utility.Network;
+using VRage.Game;
 
 namespace Rynchodon.Update
 {
@@ -283,6 +284,8 @@ namespace Rynchodon.Update
 				Action<IMyCubeBlock> constructor;
 				if (ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bAllowGuidedMissile))
 					constructor = block => {
+						if (!WeaponTargeting.ValidWeaponBlock(block))
+							return;
 						Turret t = new Turret(block);
 						RegisterForUpdates(1, t.Update_Targeting, block);
 						if (GuidedMissileLauncher.IsGuidedMissileLauncher(block))
@@ -293,6 +296,8 @@ namespace Rynchodon.Update
 					};
 				else
 					constructor = block => {
+						if (!WeaponTargeting.ValidWeaponBlock(block))
+							return; 
 						Turret t = new Turret(block);
 						RegisterForUpdates(1, t.Update_Targeting, block);
 					};
@@ -308,6 +313,8 @@ namespace Rynchodon.Update
 				if (ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bAllowGuidedMissile))
 				{
 					constructor = block => {
+						if (!WeaponTargeting.ValidWeaponBlock(block))
+							return; 
 						FixedWeapon w = new FixedWeapon(block);
 						RegisterForUpdates(1, w.Update_Targeting, block);
 						if (GuidedMissileLauncher.IsGuidedMissileLauncher(block))
@@ -319,6 +326,8 @@ namespace Rynchodon.Update
 				}
 				else
 					constructor = block => {
+						if (!WeaponTargeting.ValidWeaponBlock(block))
+							return; 
 						FixedWeapon w = new FixedWeapon(block);
 						RegisterForUpdates(1, w.Update_Targeting, block);
 					};
@@ -441,6 +450,13 @@ namespace Rynchodon.Update
 				{
 					myLogger.alwaysLog("Client, running client scripts only", Logger.severity.INFO);
 				}
+
+				if (!MyFinalBuildConstants.IS_STABLE)
+					myLogger.alwaysLog("Space Engineers build is UNSTABLE");
+				if (!MyFinalBuildConstants.IS_OFFICIAL)
+					myLogger.alwaysLog("Space Engineers build is UNOFFICIAL");
+				if (MyFinalBuildConstants.IS_DEBUG)
+					myLogger.alwaysLog("Space Engineers build is DEBUG");
 
 				Logger.debugNotify("ARMS dev version loaded", 10000);
 

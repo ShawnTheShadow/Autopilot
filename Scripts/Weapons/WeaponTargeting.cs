@@ -21,7 +21,6 @@ using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
 using VRageMath;
-using System.Linq;
 using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Rynchodon.Weapons
@@ -290,18 +289,29 @@ namespace Rynchodon.Weapons
 				return true;
 			}
 
-			if (Static == null)
-			{
-				result = null;
-				return false;
-			}
+			if (Static != null)
+				Static.logger.alwaysLog("block: " + blockId + " not found in registrar", Logger.severity.ERROR);
 
-			throw new ArgumentException("block " + blockId + " not found in registrar");
+			result = null;
+			return false;
 		}
 
 		public static bool TryGetWeaponTargeting(IMyEntity block, out WeaponTargeting result)
 		{
 			return TryGetWeaponTargeting(block.EntityId, out result);
+		}
+
+		/// <summary>
+		/// Checks that the weapon does damage and can be used by ARMS targeting.
+		/// </summary>
+		/// <param name="weapon">The weapon block to check.</param>
+		/// <returns>True iff the weapon can be used by ARMS targeting.</returns>
+		public static bool ValidWeaponBlock(IMyCubeBlock weapon)
+		{
+			MyWeaponDefinition defn = MyDefinitionManager.Static.GetWeaponDefinition(((MyWeaponBlockDefinition)weapon.GetCubeBlockDefinition()).WeaponDefinitionId);
+			MyAmmoMagazineDefinition magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(defn.AmmoMagazinesId[0]);
+			MyAmmoDefinition ammoDef = MyDefinitionManager.Static.GetAmmoDefinition(magDef.AmmoDefinitionId);
+			return ammoDef.GetDamageForMechanicalObjects() > 0f;
 		}
 
 		private static float GetRange(IMyTerminalBlock block)
