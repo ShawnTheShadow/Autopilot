@@ -36,19 +36,28 @@ namespace Rynchodon.AntennaRelay
 		private class StaticVariables
 		{
 			public Logger s_logger = new Logger("ProgrammableBlock");
-			public MyTerminalControlOnOffSwitch<MyProgrammableBlock> handleDetected;
-			public MyTerminalControlTextbox<MyProgrammableBlock> blockCountList;
+			//public MyTerminalControlOnOffSwitch<MyProgrammableBlock> handleDetected;
+            public IMyTerminalControlOnOffSwitch handleDetected;
+			//public MyTerminalControlTextbox<MyProgrammableBlock> blockCountList;
+            public IMyTerminalControlTextbox blockCountList;
 		}
 
 		private static StaticVariables Static = new StaticVariables();
 
 		static ProgrammableBlock()
 		{
-			MyTerminalAction<MyProgrammableBlock> programmable_sendMessage = new MyTerminalAction<MyProgrammableBlock>("SendMessage", new StringBuilder("Send Message"), "Textures\\GUI\\Icons\\Actions\\Start.dds")
-			{
+            //MyTerminalAction<MyProgrammableBlock> programmable_sendMessage = new MyTerminalAction<MyProgrammableBlock>("SendMessage", new StringBuilder("Send Message"), "Textures\\GUI\\Icons\\Actions\\Start.dds")
+            IMyTerminalAction programmable_sendMessage = MyAPIGateway.TerminalControls.CreateAction<IMyProgrammableBlock>("SendMessage");
+            programmable_sendMessage.Name = new StringBuilder("Send Message");
+            programmable_sendMessage.Icon = "Textures\\GUI\\Icons\\Actions\\Start.dds";
+            programmable_sendMessage.ValidForGroups = false;
+            Action<IMyTerminalBlock> ProgrammableBlock_SendMessage = programmable_sendMessage.Action;
+            //programmable_sendMessage.Action = ProgrammableBlock_SendMessage;
+
+            /*{
 				ValidForGroups = false,
 				ActionWithParameters = ProgrammableBlock_SendMessage
-			};
+			};*/
 			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
 			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
 			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
