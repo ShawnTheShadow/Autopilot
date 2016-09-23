@@ -4,7 +4,7 @@ using Rynchodon.Autopilot.Data;
 using Rynchodon.Autopilot.Movement;
 using Sandbox.ModAPI;
 using VRageMath;
-using Ingame = SpaceEngineers.Game.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI;
 
 namespace Rynchodon.Autopilot.Navigator
 {
@@ -30,7 +30,7 @@ namespace Rynchodon.Autopilot.Navigator
 			this.m_laser = rotBlock.Block as IMyLaserAntenna;
 			if (this.m_laser == null)
 			{
-				if (!(rotBlock.Block is Ingame.IMySolarPanel) && !(rotBlock.Block is Ingame.IMyOxygenFarm))
+				if (!(rotBlock.Block is IMySolarPanel) && !(rotBlock.Block is IMyOxygenFarm))
 				{
 					m_logger.alwaysLog("Block is of wrong type: " + rotBlock.Block.DisplayNameText, Logger.severity.FATAL);
 					throw new Exception("Block is of wrong type: " + rotBlock.Block.DisplayNameText);

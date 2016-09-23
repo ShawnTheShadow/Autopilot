@@ -63,13 +63,13 @@ namespace Rynchodon.Autopilot.Pathfinder
 		private HashSet<Vector3I> m_cellsUnique;
 		private Vector3 m_displacement;
 
-		public MyPlanet ClosestPlanet { get; private set; }
+		public MyPlanet gravcomp { get; private set; }
 		public State CurrentState { get; private set; }
 		public Vector3D ObstructionPoint { get; private set; }
 
 		public PlanetChecker(IMyCubeGrid grid)
 		{
-			this.m_logger = new Logger(GetType().Name, grid.getBestName, ClosestPlanet.getBestName, CurrentState.ToString);
+			this.m_logger = new Logger(GetType().Name, grid.getBestName, gravcomp.getBestName, CurrentState.ToString);
 			this.m_grid = grid;
 			this.m_cells = new MyQueue<Vector3I>(8);
 			this.m_cellsUnique = new HashSet<Vector3I>();
@@ -83,12 +83,13 @@ namespace Rynchodon.Autopilot.Pathfinder
 		{
 			Start(ref displacement);
 		}
-
-		/// <summary>
-		/// Starts checking path against the geometry of the closest planet.
-		/// </summary>
-		/// <param name="displacement">Destination - current postion</param>
-		private void Start(ref Vector3 displacement)
+        private static MyPlanet planet;
+        private static MySphericalNaturalGravityComponent gravComp = planet.Components.Get<MyGravityProviderComponent>() as MySphericalNaturalGravityComponent;
+        /// <summary>
+        /// Starts checking path against the geometry of the closest planet.
+        /// </summary>
+        /// <param name="displacement">Destination - current postion</param>
+        private void Start(ref Vector3 displacement)
 		{
 			using (m_lock.AcquireExclusiveUsing())
 			{
@@ -102,16 +103,16 @@ namespace Rynchodon.Autopilot.Pathfinder
 
 				Vector3D gridCentre = m_grid.GetCentre();
 				double distSq;
-				ClosestPlanet = MyPlanetExtensions.GetClosestPlanet(gridCentre, out distSq);
+				gravcomp = MyPlanetExtensions.GetClosestPlanet(gridCentre, out distSq);
 
-				if (ClosestPlanet == null)
+				if (gravcomp == null)
 				{
 					//m_logger.debugLog("No planets found", "Start()", Logger.severity.TRACE);
 					CurrentState = State.Clear;
 					return;
 				}
 
-				if (distSq > ClosestPlanet.MaximumRadius * ClosestPlanet.MaximumRadius)
+				if (distSq > gravcomp.MaximumRadius * gravcomp.MaximumRadius)
 				{
 					//m_logger.debugLog("Outside maximum radius of closest planet", "Start()", Logger.severity.TRACE);
 
@@ -120,12 +121,14 @@ namespace Rynchodon.Autopilot.Pathfinder
 					Path.From = gridCentre;
 					Path.To = gridCentre + displacement;
 
-					Vector3D closestPoint = Path.ClosestPoint(ClosestPlanet.WorldMatrix.Translation);
+					Vector3D closestPoint = Path.ClosestPoint(gravcomp.WorldMatrix.Translation);
 					if (closestPoint != Path.From && closestPoint != Path.To)
 					{
-						float gravityAtClose = ClosestPlanet.GetGravityMultiplier(closestPoint) - MinGravityAvoid;
-						if (gravityAtClose > 0f && gravityAtClose > ClosestPlanet.GetGravityMultiplier(Path.From) && gravityAtClose > ClosestPlanet.GetGravityMultiplier(Path.To))
-						{
+						//float gravityAtClose = ClosestPlanet.GetGravityMultiplier(closestPoint) - MinGravityAvoid;
+                        float gravityAtClose = gravComp.GetGravityMultiplier(closestPoint) - MinGravityAvoid;
+						//if (gravityAtClose > 0f && gravityAtClose > ClosestPlanet.GetGravityMultiplier(Path.From) && gravityAtClose > ClosestPlanet.GetGravityMultiplier(Path.To))
+                        if (gravityAtClose > 0f && gravityAtClose > gravComp.GetGravityMultiplier(Path.From) && gravityAtClose > gravComp.GetGravityMultiplier(Path.To))
+                        {
 							ObstructionPoint = closestPoint;
 							CurrentState = State.BlockedGravity;
 							return;
@@ -192,7 +195,7 @@ namespace Rynchodon.Autopilot.Pathfinder
 					//timer = new MyGameTimer();
 
 					Vector3D? contact;
-					if (RayCast.RayCastVoxel(ClosestPlanet, worldLine, out contact))
+					if (RayCast.RayCastVoxel(gravcomp, worldLine, out contact))
 					{
 						//var intersect = timer.Elapsed;
 						m_logger.debugLog("Intersected line: " + worldLine.From + " to " + worldLine.To + ", at " + contact, Logger.severity.DEBUG);

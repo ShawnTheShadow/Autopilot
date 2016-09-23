@@ -895,23 +895,27 @@ namespace Rynchodon.Weapons.Guided
 			float speed = myAmmo.MissileDefinition.MissileInitialSpeed + (float)(Globals.ElapsedTime - m_rail.Created).TotalSeconds * myAmmo.MissileDefinition.MissileAcceleration;
 			MyEntity.Physics.LinearVelocity = CubeBlock.CubeGrid.Physics.LinearVelocity + matrix.Forward * myAmmo.MissileDefinition.MissileInitialSpeed;
 		}
-
-		private void StartGravity()
+        private static MyPlanet planet;
+        private static MySphericalNaturalGravityComponent gravComp = planet.Components.Get<MyGravityProviderComponent>() as MySphericalNaturalGravityComponent;
+        private void StartGravity()
 		{
 			Vector3D position = MyEntity.GetPosition();
 			List<IMyVoxelBase> allPlanets = ResourcePool<List<IMyVoxelBase>>.Pool.Get();
 			MyAPIGateway.Session.VoxelMaps.GetInstances_Safe(allPlanets, voxel => voxel is MyPlanet);
 
 			foreach (MyPlanet planet in allPlanets)
-				if (planet.IsPositionInGravityWell(position))
+                //if (gravComp.IsPositionInGravityWell(position))
+                if (gravComp.IsPositionInRange(position))
 				{
 					Vector3D targetPosition = CurrentTarget.GetPosition();
-					if (!planet.IsPositionInGravityWell(targetPosition))
+					//if (!gravComp.IsPositionInGravityWell(targetPosition))
+                    if (!gravComp.IsPositionInRange(targetPosition))
 					{
 						myLogger.debugLog("Target is not in gravity well, target position: " + targetPosition + ", planet: " + planet.getBestName(), Logger.severity.WARNING);
 						return;
 					}
-					Vector3 gravAtTarget = planet.GetWorldGravityNormalized(ref targetPosition);
+                    //Vector3 gravAtTarget = planet.GetWorldGravityNormalized(ref targetPosition);
+                    Vector3 gravAtTarget = gravComp.GetWorldGravityNormalized(ref targetPosition);
 					m_gravData = new GravityData(planet, gravAtTarget);
 					break;
 				}
@@ -929,10 +933,12 @@ namespace Rynchodon.Weapons.Guided
 		private void UpdateGravity()
 		{
 			Vector3D position = MyEntity.GetPosition();
-			m_gravData.Normal = m_gravData.Planet.GetWorldGravityNormalized(ref position);
+            //m_gravData.Normal = m_gravData.Planet.GetWorldGravityNormalized(ref position);
+            m_gravData.Normal = gravComp.GetWorldGravityNormalized(ref position);
 			if (m_stage == Stage.Boost)
 			{
-				float grav = m_gravData.Planet.GetGravityMultiplier(position) * 9.81f;
+                //float grav = m_gravData.Planet.GetGravityMultiplier(position) * 9.81f;
+                float grav = gravComp.GetGravityMultiplier(position) * 9.81f;
 				m_gravData.AccelPerUpdate = m_gravData.Normal * grav * Globals.UpdateDuration;
 			}
 

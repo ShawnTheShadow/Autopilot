@@ -310,7 +310,7 @@ namespace Rynchodon.Autopilot.Pathfinder
 
 							if (m_pathState < PathState.Searching)
 								m_pathState = PathState.Searching;
-							obstructing = m_planetCheckDest.ClosestPlanet;
+							obstructing = m_planetCheckDest.gravcomp;
 
 							Vector3 direction = Vector3.Normalize(m_navBlock.WorldPosition - obstructing.GetCentre());
 							pointOfObstruction = m_planetCheckDest.ObstructionPoint + direction * 1e3f;

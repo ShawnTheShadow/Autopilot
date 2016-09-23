@@ -12,7 +12,6 @@ using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRageMath;
-using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Rynchodon.Autopilot.Navigator
 {
@@ -544,7 +543,7 @@ namespace Rynchodon.Autopilot.Navigator
 				return float.MaxValue;
 			}
 
-			foreach (Ingame.IMyShipDrill drill in allDrills)
+			foreach (IMyShipDrill drill in allDrills)
 			{
 				MyInventoryBase drillInventory = ((MyEntity)drill).GetInventoryBase(0);
 

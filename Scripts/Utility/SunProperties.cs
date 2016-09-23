@@ -35,8 +35,9 @@ namespace Rynchodon
 
 		public SunProperties()
 		{
-			MyObjectBuilder_EnvironmentDefinition environmentDefinition = MyDefinitionManager.Static.EnvironmentDefinition.GetObjectBuilder() as MyObjectBuilder_EnvironmentDefinition;
-			DefSunDirection = environmentDefinition.SunDirection;
+			//MyObjectBuilder_EnvironmentDefinition sunDefinition = MyDefinitionManager.Static.EnvironmentDefinition.GetObjectBuilder() as MyObjectBuilder_EnvironmentDefinition;
+            MySunProperties sunDefinition = new MySunProperties();
+            DefSunDirection = sunDefinition.BaseSunDirectionNormalized;
 
 			SunRotationIntervalMinutes = MyAPIGateway.Session.SessionSettings.SunRotationIntervalMinutes;
 			EnableSunRotation = MyAPIGateway.Session.SessionSettings.EnableSunRotation;

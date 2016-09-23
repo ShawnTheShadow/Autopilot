@@ -9,7 +9,6 @@ using Sandbox.ModAPI;
 using SpaceEngineers.Game.ModAPI;
 using VRage.Game.ModAPI;
 using VRageMath;
-using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Rynchodon.Autopilot.Navigator
 {
@@ -133,10 +132,10 @@ namespace Rynchodon.Autopilot.Navigator
 						m_landGearWithoutTargetBlock = true;
 					}
 				}
-				else if (landingBlock.Block is Ingame.IMyShipConnector)
+				else if (landingBlock.Block is IMyShipConnector)
 				{
 					m_gridFinder.BlockCondition = block => {
-						Ingame.IMyShipConnector connector = block as Ingame.IMyShipConnector;
+						IMyShipConnector connector = block as IMyShipConnector;
 						return connector != null && (!connector.IsConnected || connector.OtherConnector == m_navBlock.Block) && ReserveTarget(connector.EntityId);
 					};
 					m_landingDirection = m_targetBlock.Forward ?? Base6Directions.GetFlippedDirection(landingBlock.Block.FirstFaceDirection());
@@ -558,7 +557,7 @@ namespace Rynchodon.Autopilot.Navigator
 				return;
 			next_attemptLock = Globals.UpdateCount + 20ul;
 
-			Ingame.IMyShipConnector connector = m_navBlock.Block as Ingame.IMyShipConnector;
+			IMyShipConnector connector = m_navBlock.Block as IMyShipConnector;
 			if (connector != null && !connector.IsConnected && connector.IsLocked)
 				MyAPIGateway.Utilities.TryInvokeOnGameThread(() => {
 					if (!connector.IsConnected)
@@ -581,7 +580,7 @@ namespace Rynchodon.Autopilot.Navigator
 			if (asGear != null)
 				return asGear.IsLocked;
 
-			Ingame.IMyShipConnector asConn = m_navBlock.Block as Ingame.IMyShipConnector;
+			IMyShipConnector asConn = m_navBlock.Block as IMyShipConnector;
 			if (asConn != null)
 			{
 				//m_logger.debugLog("locked: " + asConn.IsLocked + ", connected: " + asConn.IsConnected + ", other: " + asConn.OtherConnector, "IsLocked()");

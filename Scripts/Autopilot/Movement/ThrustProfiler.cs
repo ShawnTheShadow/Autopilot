@@ -40,8 +40,10 @@ namespace Rynchodon.Autopilot.Movement
 		private float? m_gravStrength;
 		private ulong m_nextUpdate;
 		private bool m_primaryDirty = true;
+        private static MyPlanet planet;
+        private static  MySphericalNaturalGravityComponent gravComp = planet.Components.Get<MyGravityProviderComponent>() as MySphericalNaturalGravityComponent;
 
-		private Dictionary<Base6Directions.Direction, List<MyThrust>> thrustersInDirection = new Dictionary<Base6Directions.Direction, List<MyThrust>>();
+        private Dictionary<Base6Directions.Direction, List<MyThrust>> thrustersInDirection = new Dictionary<Base6Directions.Direction, List<MyThrust>>();
 		/// <summary>Lock for lists of thrustersInDirection, dictionary does not need a lock.</summary>
 		private FastResourceLock lock_thrustersInDirection = new FastResourceLock();
 		private Dictionary<Base6Directions.Direction, float> m_totalThrustForce = new Dictionary<Base6Directions.Direction, float>();
@@ -51,7 +53,7 @@ namespace Rynchodon.Autopilot.Movement
 		/// <summary>Direction, perpendicular to primary, with strongest thrusters.</summary>
 		private ForceInDirection m_secondaryForce = new ForceInDirection() { Direction = Base6Directions.Direction.Up };
 
-		public IMyCubeGrid Grid { get { return myGrid; } }
+        public IMyCubeGrid Grid { get { return myGrid; } }
 
 		/// <summary>Forward is the direction with the strongest thrusters and upward is the direction, perpendicular to forward, that has the strongest thrusters.</summary>
 		public StandardFlight Standard { get; private set; }
@@ -212,20 +214,24 @@ namespace Rynchodon.Autopilot.Movement
 			m_airDensity = 0f;
 			List<IMyVoxelBase> allPlanets = ResourcePool<List<IMyVoxelBase>>.Pool.Get();
 			MyAPIGateway.Session.VoxelMaps.GetInstances_Safe(allPlanets, voxel => voxel is MyPlanet);
-
-			foreach (MyPlanet planet in allPlanets)
-				if (planet.IsPositionInGravityWell(position))
+            
+            foreach (MyPlanet planet in allPlanets)
+				//if (gravComp.IsPositionInGravityWell(position))
+                if (gravComp.IsPositionInRange(position))
 				{
 					if (first)
 					{
 						first = false;
-						m_gravStrength = planet.GetGravityMultiplier(position) * 9.81f;
-						Vector3 direction = planet.GetWorldGravityNormalized(ref position);
+						//m_gravStrength = planet.GetGravityMultiplier(position) * 9.81f;
+                        m_gravStrength = gravComp.GetGravityMultiplier(position) * 9.81f;
+						//Vector3 direction = planet.GetWorldGravityNormalized(ref position);
+                        Vector3 direction = gravComp.GetWorldGravityNormalized(ref position);
 						worldGravity = m_gravStrength.Value * direction;
 					}
 					else
 					{
-						worldGravity += planet.GetWorldGravity(position);
+						//worldGravity += planet.GetWorldGravity(position);
+                        worldGravity += gravComp.GetWorldGravity(position);
 						m_gravStrength = null;
 					}
 					if (planet.HasAtmosphere)

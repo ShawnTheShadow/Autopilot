@@ -13,12 +13,11 @@ using VRage.Collections;
 using VRage.Game.ModAPI;
 using VRage.Utils;
 using VRageMath;
-using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Rynchodon.AntennaRelay
 {
 
-	public class ProgrammableBlock : BlockInstructions
+    public class ProgrammableBlock : BlockInstructions
 	{
 
 		[Serializable]
@@ -50,9 +49,9 @@ namespace Rynchodon.AntennaRelay
 				ValidForGroups = false,
 				ActionWithParameters = ProgrammableBlock_SendMessage
 			};
-			programmable_sendMessage.ParameterDefinitions.Add(Ingame.TerminalActionParameter.Get(string.Empty));
-			programmable_sendMessage.ParameterDefinitions.Add(Ingame.TerminalActionParameter.Get(string.Empty));
-			programmable_sendMessage.ParameterDefinitions.Add(Ingame.TerminalActionParameter.Get(string.Empty));
+			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
+			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
+			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
 			MyTerminalControlFactory.AddAction(programmable_sendMessage);
 
 			MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MyProgrammableBlock>());
@@ -64,7 +63,7 @@ namespace Rynchodon.AntennaRelay
 			MyTerminalControlFactory.AddControl(Static.handleDetected);
 
 			Static.blockCountList = new MyTerminalControlTextbox<MyProgrammableBlock>("BlockCounts", MyStringId.GetOrCompute("Blocks to Count"), MyStringId.GetOrCompute("Comma separate list of blocks to count"));
-			Static.blockCountList.Visible = block => ((ITerminalProperty<bool>)((IMyTerminalBlock)block).GetProperty("HandleDetected")).GetValue(block);
+			Static.blockCountList.Visible = block => ((ITerminalProperty<bool>)((Sandbox.ModAPI.Ingame.IMyTerminalBlock)block).GetProperty("HandleDetected")).GetValue(block);
 			IMyTerminalControlTextbox asInterface = Static.blockCountList as IMyTerminalControlTextbox;
 			asInterface.Getter = GetBlockCountList;
 			asInterface.Setter = SetBlockCountList;
@@ -80,7 +79,7 @@ namespace Rynchodon.AntennaRelay
 		}
 
 		/// <param name="args">Recipient grid, recipient block, message</param>
-		private static void ProgrammableBlock_SendMessage(MyFunctionalBlock block, ListReader<Ingame.TerminalActionParameter> args)
+		private static void ProgrammableBlock_SendMessage(MyFunctionalBlock block, ListReader<Sandbox.ModAPI.Ingame.TerminalActionParameter> args)
 		{
 			if (args.Count != 3)
 			{
@@ -105,11 +104,20 @@ namespace Rynchodon.AntennaRelay
 			}
 
 			int count = Message.CreateAndSendMessage(block.EntityId, stringArgs[0], stringArgs[1], stringArgs[2]);
-			if (MyAPIGateway.Session.Player != null)
-				(block as IMyTerminalBlock).AppendCustomInfo("Sent message to " + count + " block" + (count == 1 ? "" : "s"));
-		}
+           // if (MyAPIGateway.Session.Player != null)
+           //     (block as IMyTerminalBlock).AppendingCustomInfo += MessageBlock_AppendingCustomInfo;
 
-		private static bool GetHandleDetectedTerminal(IMyTerminalBlock block)
+        }
+
+        /*private static void MessageBlock_AppendingCustomInfo(IMyTerminalBlock block, StringBuilder sb)
+        {
+            //sb.Clear();
+            //sb.Append("Sent message to " + count + " block" + (count == 1 ? "" : "s"));
+
+        }*/
+
+
+        private static bool GetHandleDetectedTerminal(IMyTerminalBlock block)
 		{
 			ProgrammableBlock pb;
 			if (!Registrar.TryGetValue(block, out pb))
@@ -122,7 +130,7 @@ namespace Rynchodon.AntennaRelay
 			return pb.m_handleDetectedTerminal;
 		}
 
-		private static void SetHandleDetectedTerminal(IMyTerminalBlock block, bool value)
+		private static void SetHandleDetectedTerminal(Sandbox.ModAPI.IMyTerminalBlock block, bool value)
 		{
 			ProgrammableBlock pb;
 			if (!Registrar.TryGetValue(block, out pb))
@@ -136,7 +144,7 @@ namespace Rynchodon.AntennaRelay
 			block.SwitchTerminalTo();
 		}
 
-		private static StringBuilder GetBlockCountList(IMyTerminalBlock block)
+		private static StringBuilder GetBlockCountList(Sandbox.ModAPI.IMyTerminalBlock block)
 		{
 			ProgrammableBlock pb;
 			if (!Registrar.TryGetValue(block, out pb))
@@ -149,7 +157,7 @@ namespace Rynchodon.AntennaRelay
 			return pb.m_blockCountList_sb;
 		}
 
-		private static void SetBlockCountList(IMyTerminalBlock block, StringBuilder value)
+		private static void SetBlockCountList(Sandbox.ModAPI.IMyTerminalBlock block, StringBuilder value)
 		{
 			ProgrammableBlock pb;
 			if (!Registrar.TryGetValue(block, out pb))
@@ -168,7 +176,7 @@ namespace Rynchodon.AntennaRelay
 			Static.blockCountList.UpdateVisual();
 		}
 
-		private readonly Ingame.IMyProgrammableBlock m_progBlock;
+		private readonly IMyProgrammableBlock m_progBlock;
 		private readonly RelayClient m_networkClient;
 		private readonly Logger m_logger;
 
@@ -195,7 +203,7 @@ namespace Rynchodon.AntennaRelay
 			: base(block)
 		{
 			m_logger = new Logger(GetType().Name, block);
-			m_progBlock = block as Ingame.IMyProgrammableBlock;
+			m_progBlock = block as IMyProgrammableBlock;
 			m_networkClient = new RelayClient(block, HandleMessage);
 
 			byte index = 0;

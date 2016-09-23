@@ -4,7 +4,7 @@ using Sandbox.ModAPI;
 using VRage.Collections;
 using VRage.Game.ModAPI;
 using VRage.ObjectBuilders;
-using Ingame = VRage.Game.ModAPI.Ingame;
+using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Rynchodon.Attached
 {
@@ -240,8 +240,8 @@ namespace Rynchodon.Attached
 			}
 		}
 
-		internal static void AddRemoveConnection(AttachmentKind kind, IMyCubeGrid grid1, Ingame.IMyCubeGrid grid2, bool add)
-		{ AddRemoveConnection(kind, grid1 as IMyCubeGrid, grid2 as IMyCubeGrid, add); }
+		//internal static void AddRemoveConnection(AttachmentKind kind, IMyCubeGrid grid1, IMyCubeGrid grid2, bool add)
+		//{ AddRemoveConnection(kind, grid1 as IMyCubeGrid, grid2 as IMyCubeGrid, add); }
 
 		internal static void AddRemoveConnection(AttachmentKind kind, IMyCubeGrid grid1, IMyCubeGrid grid2, bool add)
 		{

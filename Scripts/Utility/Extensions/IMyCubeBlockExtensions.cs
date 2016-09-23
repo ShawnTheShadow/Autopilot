@@ -7,8 +7,7 @@ using Sandbox.ModAPI;
 using VRage.Game;
 using VRage.Game.ModAPI;
 using VRageMath;
-using Ingame = Sandbox.ModAPI.Ingame;
-using SE_Ingame = SpaceEngineers.Game.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI;
 
 namespace Rynchodon
 {
@@ -104,12 +103,12 @@ namespace Rynchodon
 		/// </remarks>
 		public static IEnumerable<Base6Directions.Direction> FaceDirections(this IMyCubeBlock block)
 		{
-			if (block is SE_Ingame.IMySolarPanel || block is SE_Ingame.IMyOxygenFarm)
+			if (block is IMySolarPanel || block is IMyOxygenFarm)
 			{
 				yield return Base6Directions.Direction.Forward;
 				yield return Base6Directions.Direction.Backward;
 			}
-			else if (block is Ingame.IMyLaserAntenna)
+			else if (block is IMyLaserAntenna)
 			{
 				// up is really bad for laser antenna, it can't pick an azimuth and spins constantly
 				yield return Base6Directions.Direction.Forward;
@@ -117,9 +116,9 @@ namespace Rynchodon
 				yield return Base6Directions.Direction.Backward;
 				yield return Base6Directions.Direction.Left;
 			}
-			else if (block is SE_Ingame.IMyLandingGear)
+			else if (block is IMyLandingGear)
 				yield return Base6Directions.Direction.Down;
-			else if (block is SE_Ingame.IMyShipMergeBlock)
+			else if (block is IMyShipMergeBlock)
 				yield return Base6Directions.Direction.Right;
 			else
 				yield return Base6Directions.Direction.Forward;

@@ -86,8 +86,9 @@ namespace Rynchodon.Autopilot.Navigator
 				m_logger.debugLog("altitude: " + Altitude + ", axis: " + m_orbitAxis, Logger.severity.DEBUG);
 			}
 		}
-
-		public Orbiter(Mover mover, string entity)
+        private static MyPlanet planet;
+        private static MySphericalNaturalGravityComponent gravComp = planet.Components.Get<MyGravityProviderComponent>() as MySphericalNaturalGravityComponent;
+        public Orbiter(Mover mover, string entity)
 			: base(mover)
 		{
 			this.m_logger = new Logger(GetType().Name, m_controlBlock.CubeBlock);
@@ -102,7 +103,7 @@ namespace Rynchodon.Autopilot.Navigator
 					break;
 				case "planet":
 					SetOrbitClosestVoxel(false);
-					OrbitSpeed = (float)Math.Sqrt((OrbitEntity as MyPlanet).GetGravityMultiplier(m_navBlock.WorldPosition) * 9.81f * Altitude);
+					OrbitSpeed = (float)Math.Sqrt(gravComp.GetGravityMultiplier(m_navBlock.WorldPosition) * 9.81f * Altitude);
 					if (OrbitSpeed < 1f)
 						CalcFakeOrbitSpeedForce();
 					m_logger.debugLog("Orbiting planet: " + OrbitEntity.getBestName(), Logger.severity.INFO);

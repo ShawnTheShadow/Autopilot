@@ -16,7 +16,6 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRageMath;
-using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Rynchodon.AntennaRelay
 {
@@ -533,12 +532,12 @@ namespace Rynchodon.AntennaRelay
 
 		private void UpdateTargetPowerLevel()
 		{
-			Ingame.IMyBeacon asBeacon = CubeBlock as Ingame.IMyBeacon;
+			IMyBeacon asBeacon = CubeBlock as IMyBeacon;
 			if (asBeacon != null)
 				PowerLevel_Target = asBeacon.Radius;
 			else
 			{
-				Ingame.IMyRadioAntenna asRadio = CubeBlock as Ingame.IMyRadioAntenna;
+				IMyRadioAntenna asRadio = CubeBlock as IMyRadioAntenna;
 				if (asRadio != null)
 					PowerLevel_Target = asRadio.Radius;
 			}
@@ -573,12 +572,12 @@ namespace Rynchodon.AntennaRelay
 							myLogger.debugLog("Reducing target power from " + PowerLevel_Target + " to " + myDefinition.MaxPowerLevel, Logger.severity.INFO);
 
 							// turn down slider
-							Ingame.IMyBeacon asBeacon = CubeBlock as Ingame.IMyBeacon;
+							IMyBeacon asBeacon = CubeBlock as IMyBeacon;
 							if (asBeacon != null)
 								asBeacon.SetValueFloat("Radius", PowerLevel_Target);
 							else
 							{
-								Ingame.IMyRadioAntenna asRadio = CubeBlock as Ingame.IMyRadioAntenna;
+								IMyRadioAntenna asRadio = CubeBlock as IMyRadioAntenna;
 								if (asRadio != null)
 									asRadio.SetValueFloat("Radius", PowerLevel_Target);
 							}

@@ -1,5 +1,5 @@
-﻿using VRage.Game.ModAPI;
-using Ingame = Sandbox.ModAPI.Ingame;
+﻿using Sandbox.ModAPI;
+using VRage.Game.ModAPI;
 
 namespace Rynchodon.Attached
 {
@@ -15,11 +15,11 @@ namespace Rynchodon.Attached
 
 		protected override AttachableBlockBase GetPartner()
 		{
-			Ingame.IMyShipConnector myConn = myBlock as Ingame.IMyShipConnector;
+			IMyShipConnector myConn = myBlock as IMyShipConnector;
 			if (!myConn.IsConnected)
 				return null;
 
-			Ingame.IMyShipConnector other = myConn.OtherConnector;
+			IMyShipConnector other = myConn.OtherConnector;
 			if (other == null)
 				return null;
 			return GetPartner(other.EntityId);

@@ -20,7 +20,8 @@ namespace Rynchodon.AntennaRelay
 		{
 			public Logger logger = new Logger("ManualMessage");
 
-			public MyTerminalControlButton<MyFunctionalBlock>
+            IMyTerminalControl Control = new IMyTerminalControl();
+            public MyTerminalControlButton<MyFunctionalBlock>
 				SendMessageButton = new MyTerminalControlButton<MyFunctionalBlock>("ManualMessageId", MyStringId.GetOrCompute("Send Message"),
 					MyStringId.GetOrCompute("Send a message to an Autopilot or Programmable block"), SendMessage) { SupportsMultipleBlocks = false },
 

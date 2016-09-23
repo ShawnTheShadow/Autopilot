@@ -15,7 +15,6 @@ using VRage.Collections;
 using VRage.Game.ModAPI;
 using VRage.Utils;
 using VRageMath;
-using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Rynchodon.AntennaRelay
 {
@@ -92,7 +91,7 @@ namespace Rynchodon.AntennaRelay
 		}
 
 		/// <param name="args">EntityIds as long</param>
-		private static void TextPanel_DisplayEntities(MyFunctionalBlock block, ListReader<Ingame.TerminalActionParameter> args)
+		private static void TextPanel_DisplayEntities(MyFunctionalBlock block, ListReader<Sandbox.ModAPI.Ingame.TerminalActionParameter> args)
 		{
 			Static.s_detectedIds.Clear();
 
@@ -120,7 +119,7 @@ namespace Rynchodon.AntennaRelay
 			panel.Display(Static.s_detectedIds);
 		}
 
-		private static bool GetOptionTerminal(IMyTerminalBlock block, Option opt)
+		private static bool GetOptionTerminal(Sandbox.ModAPI.IMyTerminalBlock block, Option opt)
 		{
 			TextPanel panel;
 			if (!Registrar.TryGetValue(block, out panel))
@@ -133,7 +132,7 @@ namespace Rynchodon.AntennaRelay
 			return (panel.m_optionsTerminal & opt) != 0;
 		}
 
-		private static void SetOptionTerminal(IMyTerminalBlock block, Option opt, bool value)
+		private static void SetOptionTerminal(Sandbox.ModAPI.IMyTerminalBlock block, Option opt, bool value)
 		{
 			TextPanel panel;
 			if (!Registrar.TryGetValue(block, out panel))
@@ -155,12 +154,12 @@ namespace Rynchodon.AntennaRelay
 				control.UpdateVisual();
 		}
 
-		private readonly Ingame.IMyTextPanel m_textPanel;
+		private readonly Sandbox.ModAPI.Ingame.IMyTextPanel m_textPanel;
 		private readonly Logger myLogger;
 
 		private readonly EntityValue<Option> m_optionsTerminal_ev;
 
-		private IMyTerminalBlock myTermBlock;
+		private Sandbox.ModAPI.Ingame.IMyTerminalBlock myTermBlock;
 		private RelayClient m_networkClient;
 		private Option m_options;
 		private List<sortableLastSeen> m_sortableList;
@@ -176,7 +175,7 @@ namespace Rynchodon.AntennaRelay
 			: base(block)
 		{
 			myLogger = new Logger(GetType().Name, block);
-			m_textPanel = block as Ingame.IMyTextPanel;
+			m_textPanel = block as IMyTextPanel;
 			myTermBlock = block as IMyTerminalBlock;
 			m_networkClient = new RelayClient(block);
 			myLogger.debugLog("init: " + m_block.DisplayNameText);
