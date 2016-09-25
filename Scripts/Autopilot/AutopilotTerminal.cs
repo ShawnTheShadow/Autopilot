@@ -22,22 +22,22 @@ namespace Rynchodon.Autopilot
 	public class AutopilotTerminal
 	{
 
-		[StructLayout(LayoutKind.Explicit)]
+		//[StructLayout(LayoutKind.Explicit)]
 		private struct DistanceValues
 		{
-			[FieldOffset(0)]
+			//[FieldOffset(0)]
 			public float LinearDistance;
-			[FieldOffset(4)]
+			//[FieldOffset(4)]
 			public float AngularDistance;
-			[FieldOffset(0)]
+			//[FieldOffset(0)]
 			public long PackedValue;
 		}
 
 		private class StaticVariables
 		{
 			public Logger s_logger = new Logger("AutopilotTerminal");
-			public MyTerminalControlCheckbox<MyShipController> autopilotControl;
-			public MyTerminalControlTextbox<MyShipController> autopilotCommands;
+			public IMyTerminalControlCheckbox autopilotControl;
+			public IMyTerminalControlTextbox autopilotCommands;
 		}
 
 		private static StaticVariables Static = new StaticVariables();
@@ -46,24 +46,52 @@ namespace Rynchodon.Autopilot
 		{
 			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
 
-			AddControl(new MyTerminalControlSeparator<MyShipController>() { Enabled = ShipAutopilot.IsAutopilotBlock, Visible = ShipAutopilot.IsAutopilotBlock });
+            IMyTerminalControl ctrl = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyShipController>("Seperator");
 
-			Static.autopilotControl = new MyTerminalControlCheckbox<MyShipController>("ArmsAp_OnOff", MyStringId.GetOrCompute("ARMS Autopilot"), MyStringId.GetOrCompute("Enable ARMS Autopilot"));
+            //AddControl(new MyTerminalControlSeparator<MyShipController>() { Enabled = ShipAutopilot.IsAutopilotBlock, Visible = ShipAutopilot.IsAutopilotBlock });
+            AddControl(ctrl);
+
+            //Static.autopilotControl = new MyTerminalControlCheckbox<MyShipController>("ArmsAp_OnOff", MyStringId.GetOrCompute("ARMS Autopilot"), MyStringId.GetOrCompute("Enable ARMS Autopilot"));
+            Static.autopilotControl = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyShipController>("ArmsAp_OnOff");
+            Static.autopilotControl.Title = MyStringId.GetOrCompute("ARMS Autopilot");
+            Static.autopilotControl.Tooltip = MyStringId.GetOrCompute("Enable ARMS Autopilot");
+
 			IMyTerminalValueControl<bool> valueControl = Static.autopilotControl;
 			valueControl.Getter = GetAutopilotControl;
 			valueControl.Setter = SetAutopilotControl;
 			AddControl(Static.autopilotControl);
-			AddAction(new MyTerminalAction<MyShipController>("ArmsAp_OnOff", new StringBuilder("ARMS Autopilot On/Off"), @"Textures\GUI\Icons\Actions\Toggle.dds") { Action = ToggleAutopilotControl });
-			AddAction(new MyTerminalAction<MyShipController>("ArmsAp_On", new StringBuilder("ARMS Autopilot On"), @"Textures\GUI\Icons\Actions\SwitchOn.dds") { Action = block => SetAutopilotControl(block, true) });
-			AddAction(new MyTerminalAction<MyShipController>("ArmsAp_Off", new StringBuilder("ARMS Autopilot Off"), @"Textures\GUI\Icons\Actions\SwitchOff.dds") { Action = block => SetAutopilotControl(block, false) });
+            //AddAction(new MyTerminalAction<MyShipController>("ArmsAp_OnOff", new StringBuilder("ARMS Autopilot On/Off"), @"Textures\GUI\Icons\Actions\Toggle.dds") { Action = ToggleAutopilotControl });            
+            IMyTerminalAction action = MyAPIGateway.TerminalControls.CreateAction<IMyShipController>("ArmsAp_OnOff");
+            action.Name = new StringBuilder("ARMS Autopilot On/Off");
+            action.Icon = @"Textures\GUI\Icons\Actions\Toggle.dds";
+            action.Action = ToggleAutopilotControl;
+            AddAction(action);
+            //AddAction(new MyTerminalAction<MyShipController>("ArmsAp_On", new StringBuilder("ARMS Autopilot On"), @"Textures\GUI\Icons\Actions\SwitchOn.dds") { Action = block => SetAutopilotControl(block, true) });
+                action = MyAPIGateway.TerminalControls.CreateAction<IMyShipController>("ArmsAp_On");
+            action.Name = new StringBuilder("ARMS Autopilot On");
+            action.Icon = @"Textures\GUI\Icons\Actions\SwitchOn.dds";
+            action.Action = block => SetAutopilotControl(block, true);
+            AddAction(action);
+            //AddAction(new MyTerminalAction<MyShipController>("ArmsAp_Off", new StringBuilder("ARMS Autopilot Off"), @"Textures\GUI\Icons\Actions\SwitchOff.dds") { Action = block => SetAutopilotControl(block, false) });
+            action = MyAPIGateway.TerminalControls.CreateAction<IMyShipController>("ArmsAp_Off");
+            action.Name = new StringBuilder("ARMS Autopilot Off");
+            action.Icon = @"Textures\GUI\Icons\Actions\SwitchOff.dds";
+            action.Action = block => SetAutopilotControl(block, false);
 
-			Static.autopilotCommands = new MyTerminalControlTextbox<MyShipController>("ArmsAp_Commands", MyStringId.GetOrCompute("Autopilot Commands"), MyStringId.NullOrEmpty);
+            //Static.autopilotCommands = new MyTerminalControlTextbox<MyShipController>("ArmsAp_Commands", MyStringId.GetOrCompute("Autopilot Commands"), MyStringId.NullOrEmpty);
+            Static.autopilotCommands = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("ArmsAp_Commands");
+            Static.autopilotCommands.Title = MyStringId.GetOrCompute("Autopilot Commands");
+            Static.autopilotCommands.Tooltip = MyStringId.NullOrEmpty;
 			Static.autopilotCommands.Getter = GetAutopilotCommands;
 			Static.autopilotCommands.Setter = SetAutopilotCommands;
 			AddControl(Static.autopilotCommands);
 
-			MyTerminalControlButton<MyShipController> gooeyProgram = new MyTerminalControlButton<MyShipController>("ArmsAp_GuiProgram", MyStringId.GetOrCompute("Program Autopilot"), MyStringId.GetOrCompute("Interactive programming for autopilot"), GooeyProgram);
-			gooeyProgram.Enabled = ShipAutopilot.IsAutopilotBlock;
+            ///MyTerminalControlButton<MyShipController> gooeyProgram = new MyTeminalControlButton<MyShipController>("ArmsAp_GuiProgram", MyStringId.GetOrCompute("Program Autopilot"), MyStringId.GetOrCompute("Interactive programming for autopilot"), GooeyProgram);
+            IMyTerminalControlButton gooeyProgram = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("ArmsAp_GuiProgram");
+            gooeyProgram.Title = MyStringId.GetOrCompute("Program Autopilot");
+            gooeyProgram.Tooltip = MyStringId.GetOrCompute("Interactive programming for autopilot");
+            gooeyProgram.Action = block => GooeyProgram(block);
+            gooeyProgram.Enabled = ShipAutopilot.IsAutopilotBlock;
 			AddControl(gooeyProgram);
 
 			AddProperty<Enum>("ArmsAp_Status", autopilot => autopilot.m_autopilotStatus.Value);
@@ -84,22 +112,26 @@ namespace Rynchodon.Autopilot
 			AddProperty("ArmsAp_NavigatorRotatorInfo", autopilot => autopilot.m_prevNavRotatorInfo.Value);
 		}
 
-		private static void AddControl(MyTerminalControl<MyShipController> control)
+		private static void AddControl(IMyTerminalControl control)
 		{
 			control.Enabled = ShipAutopilot.IsAutopilotBlock;
 			control.Visible = ShipAutopilot.IsAutopilotBlock;
-			MyTerminalControlFactory.AddControl<MyShipController, MyCockpit>(control);
-			if (ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bUseRemoteControl))
-				MyTerminalControlFactory.AddControl<MyShipController, MyRemoteControl>(control);
+            MyAPIGateway.TerminalControls.AddControl<IMyCockpit>(control);
+            //MyTerminalControlFactory.AddControl<MyShipController, MyCockpit>(control);
+            if (ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bUseRemoteControl))
+                //MyTerminalControlFactory.AddControl<MyShipController, MyRemoteControl>(control);
+                MyAPIGateway.TerminalControls.AddControl<IMyRemoteControl>(control);
 		}
 
-		private static void AddAction(MyTerminalAction<MyShipController> action)
+		private static void AddAction(IMyTerminalAction action)
 		{
 			action.Enabled = ShipAutopilot.IsAutopilotBlock;
-			MyTerminalControlFactory.AddAction<MyShipController, MyCockpit>(action);
+			//MyTerminalControlFactory.AddAction<MyShipController, MyCockpit>(action);
+            MyAPIGateway.TerminalControls.AddAction<IMyCockpit>(action);
 			if (ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bUseRemoteControl))
-				MyTerminalControlFactory.AddAction<MyShipController, MyRemoteControl>(action);
-		}
+				//MyTerminalControlFactory.AddAction<MyShipController, MyRemoteControl>(action);
+            MyAPIGateway.TerminalControls.AddAction<IMyRemoteControl>(action);
+        }
 
 		private static void AddProperty<T>(string id, Func<AutopilotTerminal, T> function)
 		{
@@ -118,10 +150,12 @@ namespace Rynchodon.Autopilot
 				return function.Invoke(autopilot);
 			};
 
-			MyTerminalControlFactory.AddControl<MyShipController, MyCockpit>((MyTerminalControl<MyShipController>)property);
+			//MyTerminalControlFactory.AddControl<MyShipController, MyCockpit>((MyTerminalControl<MyShipController>)property);
+            MyAPIGateway.TerminalControls.AddControl<IMyCockpit>(property);
 			if (ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bUseRemoteControl))
-				MyTerminalControlFactory.AddControl<MyShipController, MyRemoteControl>((MyTerminalControl<MyShipController>)property);
-		}
+				//MyTerminalControlFactory.AddControl<MyShipController, MyRemoteControl>((MyTerminalControl<MyShipController>)property);
+            MyAPIGateway.TerminalControls.AddControl<IMyRemoteControl>(property);
+        }
 
 		private static void AddProperty(AutopilotFlags flag)
 		{
@@ -199,7 +233,7 @@ namespace Rynchodon.Autopilot
 			autopilot.m_autopilotCommands.Value = value;
 		}
 
-		public static void GooeyProgram(MyShipController block)
+		public static void GooeyProgram(IMyTerminalBlock block)
 		{
 			AutopilotCommands cmds = AutopilotCommands.GetOrCreate(block);
 			if (cmds != null)

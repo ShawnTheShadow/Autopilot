@@ -243,7 +243,8 @@ namespace Rynchodon.Autopilot.Instruction
 				m_commandList.Clear();
 				m_syntaxErrors.Clear();
 
-				MyTerminalControls.Static.CustomControlGetter += CustomControlGetter;
+				//MyTerminalControls.Static.CustomControlGetter += CustomControlGetter;
+                MyAPIGateway.TerminalControls.CustomControlGetter += CustomControlGetter;
 				m_block.AppendingCustomInfo += m_block_AppendingCustomInfo;
 
 				Commands = AutopilotTerminal.GetAutopilotCommands(m_block).ToString();
@@ -385,9 +386,9 @@ namespace Rynchodon.Autopilot.Instruction
 
 		private void CustomControlGetter(IMyTerminalBlock block, List<IMyTerminalControl> controls)
 		{
-			//m_logger.debugLog("entered");
-
-			if (block != m_block)
+            //m_logger.debugLog("entered");
+            IMyTerminalControlButton ctrl_btn;
+            if (block != m_block)
 				return;
 
 			controls.Clear();
@@ -398,23 +399,78 @@ namespace Rynchodon.Autopilot.Instruction
 
 				if (m_termCommandList == null)
 				{
-					m_termCommandList = new MyTerminalControlListbox<MyShipController>("CommandList", MyStringId.GetOrCompute("Commands"), MyStringId.NullOrEmpty, false, 10);
-					m_termCommandList.ListContent = ListCommands;
+                   //m_termCommandList = new MyTerminalControlListbox<MyShipController>("CommandList", MyStringId.GetOrCompute("Commands"), MyStringId.NullOrEmpty, false, 10);
+                    m_termCommandList = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyShipController>("CommandList");
+                    m_termCommandList.Title = MyStringId.GetOrCompute("Commands");
+                    m_termCommandList.Tooltip = MyStringId.NullOrEmpty;
+                    m_termCommandList.Multiselect = false;
+                    m_termCommandList.VisibleRowsCount = 10;                  
+                    m_termCommandList.ListContent = ListCommands;
 					m_termCommandList.ItemSelected = CommandSelected;
 				}
-				controls.Add(m_termCommandList);
+				controls.Add(m_termCommandList);               
 
-				controls.Add(new MyTerminalControlButton<MyShipController>("AddCommand", MyStringId.GetOrCompute("Add Command"), MyStringId.NullOrEmpty, AddCommand));
-				controls.Add(new MyTerminalControlButton<MyShipController>("InsertCommand", MyStringId.GetOrCompute("Insert Command"), MyStringId.NullOrEmpty, InsertCommand));
-				controls.Add(new MyTerminalControlButton<MyShipController>("RemoveCommand", MyStringId.GetOrCompute("Remove Command"), MyStringId.NullOrEmpty, RemoveCommand));
-				controls.Add(new MyTerminalControlButton<MyShipController>("EditCommand", MyStringId.GetOrCompute("Edit Command"), MyStringId.NullOrEmpty, EditCommand));
-				controls.Add(new MyTerminalControlButton<MyShipController>("MoveCommandUp", MyStringId.GetOrCompute("Move Command Up"), MyStringId.NullOrEmpty, MoveCommandUp));
-				controls.Add(new MyTerminalControlButton<MyShipController>("MoveCommandDown", MyStringId.GetOrCompute("Move Command Down"), MyStringId.NullOrEmpty, MoveCommandDown));
-				controls.Add(new MyTerminalControlSeparator<MyShipController>());
-				controls.Add(new MyTerminalControlButton<MyShipController>("Finished", MyStringId.GetOrCompute("Save & Exit"), MyStringId.GetOrCompute("Save all commands and exit"), b => Finished(true)));
-				controls.Add(new MyTerminalControlButton<MyShipController>("DiscardAll", MyStringId.GetOrCompute("Discard & Exit"), MyStringId.GetOrCompute("Discard all commands and exit"), b => Finished(false)));
+                //controls.Add(new MyTerminalControlButton<MyShipController>("AddCommand", MyStringId.GetOrCompute("Add Command"), MyStringId.NullOrEmpty, AddCommand));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("AddCommand");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Add Command");
+                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = AddCommand;
+                controls.Add(ctrl_btn);
 
-				return;
+				//controls.Add(new MyTerminalControlButton<MyShipController>("InsertCommand", MyStringId.GetOrCompute("Insert Command"), MyStringId.NullOrEmpty, InsertCommand));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("InsertCommand");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Insert Command");
+                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = InsertCommand;
+                controls.Add(ctrl_btn);
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("RemoveCommand", MyStringId.GetOrCompute("Remove Command"), MyStringId.NullOrEmpty, RemoveCommand));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("RemoveCommand");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Remove Command");
+                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = RemoveCommand;
+                controls.Add(ctrl_btn);
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("EditCommand", MyStringId.GetOrCompute("Edit Command"), MyStringId.NullOrEmpty, EditCommand));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("EditCommand");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Edit Command");
+                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = EditCommand;
+                controls.Add(ctrl_btn);
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("MoveCommandUp", MyStringId.GetOrCompute("Move Command Up"), MyStringId.NullOrEmpty, MoveCommandUp));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("MoveCommandUp");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Move Command Up");
+                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = MoveCommandUp;
+                controls.Add(ctrl_btn);
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("MoveCommandDown", MyStringId.GetOrCompute("Move Command Down"), MyStringId.NullOrEmpty, MoveCommandDown));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("MoveCommandDown");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Move Command Down");
+                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = MoveCommandDown;
+                controls.Add(ctrl_btn);
+
+                //controls.Add(new MyTerminalControlSeparator<MyShipController>());      
+                controls.Add(MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyShipController>("Seperator"));
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("Finished", MyStringId.GetOrCompute("Save & Exit"), MyStringId.GetOrCompute("Save all commands and exit"), b => Finished(true)));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("Finished");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Save & Exit");
+                ctrl_btn.Tooltip = MyStringId.GetOrCompute("Save all commands and exit");
+                ctrl_btn.Action = b => Finished(true);
+                controls.Add(ctrl_btn);
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("DiscardAll", MyStringId.GetOrCompute("Discard & Exit"), MyStringId.GetOrCompute("Discard all commands and exit"), b => Finished(false)));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("DiscardAll");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Discard & Exit");
+                ctrl_btn.Tooltip = MyStringId.GetOrCompute("Discard all commands and exit");
+                ctrl_btn.Action = b => Finished(false);
+                controls.Add(ctrl_btn);
+
+
+                return;
 			}
 
 			if (m_currentCommand == null)
@@ -422,28 +478,36 @@ namespace Rynchodon.Autopilot.Instruction
 				// add/insert new command
 				if (m_currentAddNode.Count == 0)
 					m_currentAddNode.Push(Static.addCommandRoot);
-
-				foreach (AddCommandTreeNode child in m_currentAddNode.Peek().Children)
-					controls.Add(new MyTerminalControlButton<MyShipController>(child.Name.RemoveWhitespace(), MyStringId.GetOrCompute(child.Name), MyStringId.GetOrCompute(child.Tooltip), shipController => {
-						AddCommandLeafNode leaf = child as AddCommandLeafNode;
-						if (leaf != null)
-						{
-							m_currentCommand = leaf.Command.Clone();
-							if (!m_currentCommand.HasControls)
-								CheckAndSave(block);
-							m_currentAddNode.Clear();
-						}
-						else
-							m_currentAddNode.Push((AddCommandInternalNode)child);
-						ClearMessage();
-					}));
-
-				controls.Add(new MyTerminalControlButton<MyShipController>("UpOneLevel", MyStringId.GetOrCompute("Up one level"), MyStringId.GetOrCompute("Return to previous list"), shipController => {
+                
+                foreach (AddCommandTreeNode child in m_currentAddNode.Peek().Children)
+                {
+                     ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>(child.Name.RemoveWhitespace());
+                    ctrl_btn.Title = MyStringId.GetOrCompute(child.Name);
+                    ctrl_btn.Tooltip = MyStringId.GetOrCompute(child.Tooltip);
+                    ctrl_btn.Action = shipController =>
+                    {
+                        AddCommandLeafNode leaf = child as AddCommandLeafNode;
+                        if (leaf != null)
+                        {
+                            m_currentCommand = leaf.Command.Clone();
+                            if (!m_currentCommand.HasControls)
+                                CheckAndSave(block);
+                            m_currentAddNode.Clear();
+                        }
+                        else
+                            m_currentAddNode.Push((AddCommandInternalNode)child);
+                        ClearMessage();
+                    };
+                }
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("UpOneLevel");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Up one level");
+                ctrl_btn.Tooltip = MyStringId.GetOrCompute("Return to previous list");
+                ctrl_btn.Action = shipController => {
 					m_currentAddNode.Pop();
 					if (m_currentAddNode.Count == 0)
 						m_listCommands = true;
 					shipController.SwitchTerminalTo();
-				}));
+				};
 
 				return;
 			}
@@ -451,10 +515,19 @@ namespace Rynchodon.Autopilot.Instruction
 			m_logger.debugLog("showing single command: " + m_currentCommand.Identifier);
 
 			m_currentCommand.AddControls(controls);
-			controls.Add(new MyTerminalControlSeparator<MyShipController>());
-			controls.Add(new MyTerminalControlButton<MyShipController>("SaveGooeyCommand", MyStringId.GetOrCompute("Check & Save"), MyStringId.GetOrCompute("Check the current command for syntax errors and save it"), CheckAndSave));
-			controls.Add(new MyTerminalControlButton<MyShipController>("DiscardGooeyCommand", MyStringId.GetOrCompute("Discard"), MyStringId.GetOrCompute("Discard the current command"), Discard));
-		}
+			//controls.Add(new MyTerminalControlSeparator<MyShipController>());
+            controls.Add(MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyShipController>("Seperator"));
+            //controls.Add(new MyTerminalControlButton<MyShipController>("SaveGooeyCommand", MyStringId.GetOrCompute("Check & Save"), MyStringId.GetOrCompute("Check the current command for syntax errors and save it"), CheckAndSave));
+            ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("SaveGooeyCommand");
+            ctrl_btn.Title = MyStringId.GetOrCompute("Check & Save");
+            ctrl_btn.Tooltip = MyStringId.GetOrCompute("Check the current command for syntax errors and save it");
+            ctrl_btn.Action = CheckAndSave;
+            //controls.Add(new MyTerminalControlButton<MyShipController>("DiscardGooeyCommand", MyStringId.GetOrCompute("Discard"), MyStringId.GetOrCompute("Discard the current command"), Discard));
+            ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("DiscardGooeyCommand");
+            ctrl_btn.Title = MyStringId.GetOrCompute("Discard");
+            ctrl_btn.Tooltip = MyStringId.GetOrCompute("Discard the current command");
+            ctrl_btn.Action = Discard;
+        }
 
 		private void ListCommands(IMyTerminalBlock block, List<MyTerminalControlListBoxItem> allItems, List<MyTerminalControlListBoxItem> selected)
 		{
@@ -670,7 +743,8 @@ namespace Rynchodon.Autopilot.Instruction
 				GetActions(Commands, m_actionList);
 			}
 
-			MyTerminalControls.Static.CustomControlGetter -= CustomControlGetter;
+			//MyTerminalControls.Static.CustomControlGetter -= CustomControlGetter;
+            MyAPIGateway.TerminalControls.CustomControlGetter -= CustomControlGetter;
 			m_block.AppendingCustomInfo -= m_block_AppendingCustomInfo;
 
 			m_block.RefreshCustomInfo();
@@ -681,7 +755,7 @@ namespace Rynchodon.Autopilot.Instruction
 
 		#endregion Button Action
 
-		private void LogAndInfo(string message, [CallerMemberName] string member = null, [CallerLineNumber] int lineNumber = 0)
+		private void LogAndInfo(string message,string member = null, int lineNumber = 0)
 		{
 			m_logger.debugLog(message, member: member, lineNumber: lineNumber);
 			m_infoMessage = message;
