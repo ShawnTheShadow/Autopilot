@@ -9,7 +9,6 @@ using Rynchodon.Utility.Network;
 using Rynchodon.Utility.Vectors;
 using Sandbox.Definitions;
 using Sandbox.Game.Entities;
-using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
@@ -129,11 +128,13 @@ namespace Rynchodon.AntennaRelay
 		static Projector()
 		{
 			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
-			MyTerminalControls.Static.CustomControlGetter += CustomControlGetter;
+			//MyTerminalControls.Static.CustomControlGetter += CustomControlGetter;
+            MyAPIGateway.TerminalControls.CustomControlGetter += CustomControlGetter;
 
 			MyAPIGateway.Session.DamageSystem.RegisterAfterDamageHandler((int)MyDamageSystemPriority.Low, AfterDamageHandler);
 
-			MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MySpaceProjector>());
+            //MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MySpaceProjector>());
+            MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyProjector>("separator");
 
 			AddCheckbox("HoloDisplay", "Holographic Display", "Holographically display this ship and nearby detected ships", Option.OnOff);
 			AddCheckbox("HD_This Ship", "This Ship", "Holographically display this ship", Option.ThisShip);
@@ -142,46 +143,65 @@ namespace Rynchodon.AntennaRelay
 			AddCheckbox("HD_Neutral", "Neutral Ships", "Holographically display neutral ships", Option.Neutral);
 			AddCheckbox("HD_Enemy", "Enemy Ships", "Holographically display enemy ships", Option.Enemy);
 
-			MyTerminalControlSlider<MySpaceProjector> slider = new MyTerminalControlSlider<MySpaceProjector>("HD_RangeDetection", MyStringId.GetOrCompute("Detection Range"), MyStringId.GetOrCompute("Maximum distance of detected entity"));
-			slider.DefaultValue = DefaultRangeDetection;
-			slider.Normalizer = (block, value) => Normalizer(MinRangeDetection, MaxRangeDetection, block, value);
-			slider.Denormalizer = (block, value) => Denormalizer(MinRangeDetection, MaxRangeDetection, block, value);
+            //MyTerminalControlSlider<MySpaceProjector> slider = new MyTerminalControlSlider<MySpaceProjector>("HD_RangeDetection", MyStringId.GetOrCompute("Detection Range"), MyStringId.GetOrCompute("Maximum distance of detected entity"));
+            IMyTerminalControlSlider slider = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyProjector>("HD_RangeDetection");
+            slider.Title = MyStringId.GetOrCompute("Detection Range");
+            slider.Tooltip = MyStringId.GetOrCompute("Maximum distance of detected entity");
+            slider.SetLimits(MinRangeDetection, MaxRangeDetection);
+			//slider.DefaultValue = DefaultRangeDetection;
+			//slider.Normalizer = (block, value) => Normalizer(MinRangeDetection, MaxRangeDetection, block, value);
+			//slider.Denormalizer = (block, value) => Denormalizer(MinRangeDetection, MaxRangeDetection, block, value);
 			slider.Writer = (block, sb) => WriterMetres(GetRangeDetection, block, sb);
 			IMyTerminalValueControl<float> valueControl = slider;
 			valueControl.Getter = GetRangeDetection;
 			valueControl.Setter = SetRangeDetection;
 			Static.TermControls.Add(slider);
 
-			slider = new MyTerminalControlSlider<MySpaceProjector>("HD_RadiusHolo", MyStringId.GetOrCompute("Hologram Radius"), MyStringId.GetOrCompute("Maximum radius of hologram"));
-			slider.DefaultValue = DefaultRadiusHolo;
+            //slider = new MyTerminalControlSlider<MySpaceProjector>("HD_RadiusHolo", MyStringId.GetOrCompute("Hologram Radius"), MyStringId.GetOrCompute("Maximum radius of hologram"));
+            slider = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyProjector>("HD_RadiusHolo");
+            slider.Title = MyStringId.GetOrCompute("Hologram Radius");
+            slider.Tooltip = MyStringId.GetOrCompute("Maximum radius of hologram");
+            slider.SetLimits(MinRadiusHolo, MaxRadiusHolo);
+			/*slider.DefaultValue = DefaultRadiusHolo;
 			slider.Normalizer = (block, value) => Normalizer(MinRadiusHolo, MaxRadiusHolo, block, value);
-			slider.Denormalizer = (block, value) => Denormalizer(MinRadiusHolo, MaxRadiusHolo, block, value);
+			slider.Denormalizer = (block, value) => Denormalizer(MinRadiusHolo, MaxRadiusHolo, block, value);*/
 			slider.Writer = (block, sb) => WriterMetres(GetRadiusHolo, block, sb);
 			valueControl = slider;
 			valueControl.Getter = GetRadiusHolo;
 			valueControl.Setter = SetRadiusHolo;
 			Static.TermControls.Add(slider);
 
-			slider = new MyTerminalControlSlider<MySpaceProjector>("HD_EntitySizeScale", MyStringId.GetOrCompute("Entity Size Scale"), MyStringId.GetOrCompute("Larger value causes entities to appear larger"));
-			slider.DefaultValue = DefaultSizeScale;
+			//slider = new MyTerminalControlSlider<MySpaceProjector>("HD_EntitySizeScale", MyStringId.GetOrCompute("Entity Size Scale"), MyStringId.GetOrCompute("Larger value causes entities to appear larger"));
+            slider = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyProjector>("HD_EntitySizeScale");
+            slider.Title = MyStringId.GetOrCompute("Entity Size Scale");
+            slider.Tooltip = MyStringId.GetOrCompute("Larger value causes entities to appear larger");
+            slider.SetLimits(MinSizeScale, MaxSizeScale);
+            /*slider.DefaultValue = DefaultSizeScale;
 			slider.Normalizer = (block, value) => Normalizer(MinSizeScale, MaxSizeScale, block, value);
-			slider.Denormalizer = (block, value) => Denormalizer(MinSizeScale, MaxSizeScale, block, value);
+			slider.Denormalizer = (block, value) => Denormalizer(MinSizeScale, MaxSizeScale, block, value);*/
 			slider.Writer = (block, sb) => sb.Append(GetSizeScale(block));
 			valueControl = slider;
 			valueControl.Getter = GetSizeScale;
 			valueControl.Setter = SetSizeScale;
 			Static.TermControls.Add(slider);
 
-			Static.TermControls.Add(new MyTerminalControlSeparator<MySpaceProjector>());
+			//Static.TermControls.Add(new MyTerminalControlSeparator<MySpaceProjector>());
+            Static.TermControls.Add(MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyProjector>("Separator"));
 
-			MyTerminalControlCheckbox<MySpaceProjector> control = new MyTerminalControlCheckbox<MySpaceProjector>("HD_MouseControls", MyStringId.GetOrCompute("Mouse Controls"),
-				MyStringId.GetOrCompute("Allow manipulation of hologram with mouse. User-specific setting."));
-			IMyTerminalValueControl<bool> valueControlBool = control;
-			valueControlBool.Getter = block => Static.MouseControls;
+            //MyTerminalControlCheckbox<MySpaceProjector> control = new MyTerminalControlCheckbox<MySpaceProjector>("HD_MouseControls", MyStringId.GetOrCompute("Mouse Controls"),
+            //MyStringId.GetOrCompute("Allow manipulation of hologram with mouse. User-specific setting."));
+            IMyTerminalControlCheckbox control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyProjector>("HD_MouseControls");
+            control.Title = MyStringId.GetOrCompute("Mouse Controls");
+            control.Tooltip = MyStringId.GetOrCompute("Allow manipulation of hologram with mouse. User-specific setting.");
+            IMyTerminalValueControl<bool> valueControlBool = control;
+            valueControlBool.Getter = block => Static.MouseControls;
 			valueControlBool.Setter = (block, value) => Static.MouseControls = value;
 			Static.TermControls.Add(control);
 
-			control = new MyTerminalControlCheckbox<MySpaceProjector>("HD_ShowBoundary", MyStringId.GetOrCompute("Show Boundary"), MyStringId.GetOrCompute("Show the boundaries of the hologram. User-specific setting."));
+            //control = new MyTerminalControlCheckbox<MySpaceProjector>("HD_ShowBoundary", MyStringId.GetOrCompute("Show Boundary"), MyStringId.GetOrCompute("Show the boundaries of the hologram. User-specific setting."));
+            control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyProjector>("HD_ShowBoundary");
+            control.Title = MyStringId.GetOrCompute("Show Boundary");
+            control.Tooltip = MyStringId.GetOrCompute("Show the boundaries of the hologram. User-specific setting.");
 			valueControlBool = control;
 			valueControlBool.Getter = block => ShowBoundary;
 			valueControlBool.Setter = (block, value) => ShowBoundary = value;
@@ -193,7 +213,8 @@ namespace Rynchodon.AntennaRelay
 			AddOffsetSlider("HD_OffsetY", "Up/Down Offset", "+ve moves hologram up, -ve moves hologram down", 1);
 			AddOffsetSlider("HD_OffsetZ", "Back/Fore Offset", "+ve moves hologram back, -ve moves hologram forward", 2);
 
-			Static.TermControls_Offset.Add(new MyTerminalControlSeparator<MySpaceProjector>());
+            //Static.TermControls_Offset.Add(new MyTerminalControlSeparator<MySpaceProjector>());
+            Static.TermControls_Offset.Add(MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyProjector>("separator"));
 
 			AddCheckbox("HD_IntegrityColour", "Colour by Integrity", "Colour blocks according to their integrities", Option.IntegrityColours);
 
@@ -229,7 +250,8 @@ namespace Rynchodon.AntennaRelay
 		private static void Entities_OnCloseAll()
 		{
 			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
-			MyTerminalControls.Static.CustomControlGetter -= CustomControlGetter;
+			//MyTerminalControls.Static.CustomControlGetter -= CustomControlGetter;
+            MyAPIGateway.TerminalControls.CustomControlGetter -= CustomControlGetter;
 			Static = null;
 		}
 
@@ -237,22 +259,27 @@ namespace Rynchodon.AntennaRelay
 
 		private static void AddCheckbox(string id, string title, string toolTip, Option opt)
 		{
-			MyTerminalControlCheckbox<MySpaceProjector> control = new MyTerminalControlCheckbox<MySpaceProjector>(id, MyStringId.GetOrCompute(title), MyStringId.GetOrCompute(toolTip));
-			IMyTerminalValueControl<bool> valueControl = control;
+			//MyTerminalControlCheckbox<MySpaceProjector> control = new MyTerminalControlCheckbox<MySpaceProjector>(id, MyStringId.GetOrCompute(title), MyStringId.GetOrCompute(toolTip));
+            IMyTerminalControlCheckbox control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyProjector>(id);
+            control.Title = MyStringId.GetOrCompute(title);
+            control.Tooltip = MyStringId.GetOrCompute(toolTip);
+            IMyTerminalValueControl<bool> valueControl = control;
 			valueControl.Getter = block => GetOptionTerminal(block, opt);
 			valueControl.Setter = (block, value) => SetOptionTerminal(block, opt, value);
 			if (Static.TermControls.Count == 0)
-				MyTerminalControlFactory.AddControl(control);
+                MyAPIGateway.TerminalControls.AddControl<IMyTerminalControlCheckbox>(control);
 			Static.TermControls.Add(control);
 		}
 
 		private static void AddOffsetSlider(string id, string title, string toolTip, int dim)
 		{
-			MyTerminalControlSlider<MySpaceProjector> control = new MyTerminalControlSlider<MySpaceProjector>(id, MyStringId.GetOrCompute(title), MyStringId.GetOrCompute(toolTip));
+            //MyTerminalControlSlider<MySpaceProjector> control = new MyTerminalControlSlider<MySpaceProjector>(id, MyStringId.GetOrCompute(title), MyStringId.GetOrCompute(toolTip));
+            IMyTerminalControlSlider control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyProjector>(id);
 			Func<IMyTerminalBlock, float> getter = block => GetOffset(block, dim);
-			control.DefaultValue = dim == 1 ? 2.5f : 0f;
+            /*control.DefaultValue = dim == 1 ? 2.5f : 0f;
 			control.Normalizer = (block, value) => Normalizer(MinOffset, MaxOffset, block, value);
-			control.Denormalizer = (block, value) => Denormalizer(MinOffset, MaxOffset, block, value);
+			control.Denormalizer = (block, value) => Denormalizer(MinOffset, MaxOffset, block, value);*/
+            control.SetLimits(MinOffset, MaxOffset);
 			control.Writer = (block, sb) => WriterMetres(getter, block, sb);
 			IMyTerminalValueControl<float> valueControl = control;
 			valueControl.Getter = getter;
@@ -704,7 +731,8 @@ namespace Rynchodon.AntennaRelay
 				return;
 			}
 
-			if (MyGuiScreenTerminal.GetCurrentScreen() == MyTerminalPageEnum.None && MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter && Static.MouseControls)
+			//if (MyGuiScreenTerminal.GetCurrentScreen() == MyTerminalPageEnum.None && MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter && Static.MouseControls)
+            if (MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.None && MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter && Static.MouseControls)
 				CheckInput();
 
 			PositionWorld projectionCentre = m_offset.ToWorld(m_block);

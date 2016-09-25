@@ -3,9 +3,6 @@ using System.Text;
 using System.Xml.Serialization;
 using Rynchodon.Instructions;
 using Rynchodon.Utility.Network;
-using Sandbox.Game.Entities.Blocks;
-using Sandbox.Game.Entities.Cube;
-using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces;
 using Sandbox.ModAPI.Interfaces.Terminal;
@@ -58,27 +55,37 @@ namespace Rynchodon.AntennaRelay
 				ValidForGroups = false,
 				ActionWithParameters = ProgrammableBlock_SendMessage
 			};*/
+            /*programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
 			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
-			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
-			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
-			MyTerminalControlFactory.AddAction(programmable_sendMessage);
+			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));*/
+            MyAPIGateway.TerminalControls.AddAction<IMyProgrammableBlock>(programmable_sendMessage);
+			//MyTerminalControlFactory.AddAction(programmable_sendMessage);
 
-			MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MyProgrammableBlock>());
+			//MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MyProgrammableBlock>());
+            string separator = null;
+            MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyProgrammableBlock>(separator);
 
-			Static.handleDetected = new MyTerminalControlOnOffSwitch<MyProgrammableBlock>("HandleDetected", MyStringId.GetOrCompute("Handle Detected"));
+			//Static.handleDetected = new MyTerminalControlOnOffSwitch<MyProgrammableBlock>("HandleDetected", MyStringId.GetOrCompute("Handle Detected"));
 			IMyTerminalValueControl<bool> valueControl = Static.handleDetected as IMyTerminalValueControl<bool>;
 			valueControl.Getter = GetHandleDetectedTerminal;
 			valueControl.Setter = SetHandleDetectedTerminal;
-			MyTerminalControlFactory.AddControl(Static.handleDetected);
+			//MyTerminalControlFactory.AddControl(Static.handleDetected);
+            Static.handleDetected = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyProgrammableBlock>("HandleDetected");
+            Static.handleDetected.Title = MyStringId.GetOrCompute("Handle Detected");
+            MyAPIGateway.TerminalControls.AddControl<IMyProgrammableBlock>(Static.handleDetected);
 
-			Static.blockCountList = new MyTerminalControlTextbox<MyProgrammableBlock>("BlockCounts", MyStringId.GetOrCompute("Blocks to Count"), MyStringId.GetOrCompute("Comma separate list of blocks to count"));
-			Static.blockCountList.Visible = block => ((ITerminalProperty<bool>)((Sandbox.ModAPI.Ingame.IMyTerminalBlock)block).GetProperty("HandleDetected")).GetValue(block);
+
+			//Static.blockCountList = new MyTerminalControlTextbox<MyProgrammableBlock>("BlockCounts", MyStringId.GetOrCompute("Blocks to Count"), MyStringId.GetOrCompute("Comma separate list of blocks to count"));
+			//Static.blockCountList.Visible = block => ((ITerminalProperty<bool>)((Sandbox.ModAPI.Ingame.IMyTerminalBlock)block).GetProperty("HandleDetected")).GetValue(block);
 			IMyTerminalControlTextbox asInterface = Static.blockCountList as IMyTerminalControlTextbox;
 			asInterface.Getter = GetBlockCountList;
 			asInterface.Setter = SetBlockCountList;
-			MyTerminalControlFactory.AddControl(Static.blockCountList);
+			//MyTerminalControlFactory.AddControl(Static.blockCountList);
+            Static.blockCountList = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyProgrammableBlock>("BlockCounts");
+            Static.blockCountList.Visible = block => ((ITerminalProperty<bool>)block.GetProperty("HandleDetected")).GetValue(block);
+            MyAPIGateway.TerminalControls.AddControl<IMyProgrammableBlock>(Static.blockCountList);
 
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
+            MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
 		}
 
 		private static void Entities_OnCloseAll()
@@ -88,7 +95,7 @@ namespace Rynchodon.AntennaRelay
 		}
 
 		/// <param name="args">Recipient grid, recipient block, message</param>
-		private static void ProgrammableBlock_SendMessage(MyFunctionalBlock block, ListReader<Sandbox.ModAPI.Ingame.TerminalActionParameter> args)
+		private static void ProgrammableBlock_SendMessage(IMyFunctionalBlock block, ListReader<Sandbox.ModAPI.Ingame.TerminalActionParameter> args)
 		{
 			if (args.Count != 3)
 			{
@@ -101,7 +108,7 @@ namespace Rynchodon.AntennaRelay
 			string[] stringArgs = new string[3];
 			for (int i = 0; i < 3; i++)
 			{
-				if (args[i].TypeCode != TypeCode.String)
+				if (args[i].GetType() != typeof(string))
 				{
 					Static.s_logger.debugLog("TerminalActionParameter #" + i + " is of wrong type, expected String, got " + args[i].TypeCode, Logger.severity.WARNING);
 					if (MyAPIGateway.Session.Player != null)
@@ -139,7 +146,7 @@ namespace Rynchodon.AntennaRelay
 			return pb.m_handleDetectedTerminal;
 		}
 
-		private static void SetHandleDetectedTerminal(Sandbox.ModAPI.IMyTerminalBlock block, bool value)
+		private static void SetHandleDetectedTerminal(IMyTerminalBlock block, bool value)
 		{
 			ProgrammableBlock pb;
 			if (!Registrar.TryGetValue(block, out pb))
@@ -153,7 +160,7 @@ namespace Rynchodon.AntennaRelay
 			block.SwitchTerminalTo();
 		}
 
-		private static StringBuilder GetBlockCountList(Sandbox.ModAPI.IMyTerminalBlock block)
+		private static StringBuilder GetBlockCountList(IMyTerminalBlock block)
 		{
 			ProgrammableBlock pb;
 			if (!Registrar.TryGetValue(block, out pb))
@@ -166,7 +173,7 @@ namespace Rynchodon.AntennaRelay
 			return pb.m_blockCountList_sb;
 		}
 
-		private static void SetBlockCountList(Sandbox.ModAPI.IMyTerminalBlock block, StringBuilder value)
+		private static void SetBlockCountList(IMyTerminalBlock block, StringBuilder value)
 		{
 			ProgrammableBlock pb;
 			if (!Registrar.TryGetValue(block, out pb))
