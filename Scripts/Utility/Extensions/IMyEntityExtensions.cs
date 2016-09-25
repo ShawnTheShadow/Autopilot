@@ -59,8 +59,9 @@ namespace Rynchodon
 		/// </summary>
 		public static bool IsMissile(this IMyEntity entity)
 		{
-			// only MyMissile derives from MyAmmoBase
-			return entity is MyAmmoBase;
+            // only MyMissile derives from MyAmmoBase
+            return entity is IMyMissileGunObject;
+			//return entity is IMyAmmoBase;
 		}
 
 	}

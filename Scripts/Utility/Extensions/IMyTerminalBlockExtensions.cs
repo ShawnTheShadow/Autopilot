@@ -7,6 +7,8 @@ using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using VRage.Input;
+using System.Diagnostics;
+using System.Reflection;
 
 namespace Rynchodon
 {
@@ -42,15 +44,22 @@ namespace Rynchodon
 			block.AppendingCustomInfo -= action;
 		}
 
+
 		/// <summary>
 		/// Wait for input to finish, then switch control panel to the specified block.
 		/// </summary>
 		/// <param name="block">The block to switch to.</param>
-		public static void SwitchTerminalTo(this IMyTerminalBlock block, [CallerMemberName] string caller = null)
+		public static void SwitchTerminalTo(this IMyTerminalBlock block, string caller = null)
 		{
 			if (Static == null)
 				return;
-
+            if (caller == null)
+            {
+                StackTrace stackTrace = new StackTrace();
+                StackFrame frame = stackTrace.GetFrame(1);
+                MethodBase method = frame.GetMethod();
+                caller = method.Name.Replace("set_", "");
+            }
 			//Logger.debugLog("IMyTerminalBlockExtensions", "block: " + block.getBestName());
 			Logger.DebugLog("IMyTerminalBlockExtensions", "null block from " + caller, Logger.severity.FATAL, condition: block == null);
 			UpdateManager.Unregister(1, SwitchTerminalWhenNoInput);
@@ -85,6 +94,7 @@ namespace Rynchodon
 			//Logger.debugLog("IMyTerminalBlockExtensions", "switching to: " + switchTo.getBestName());
 			UpdateManager.Unregister(1, SwitchTerminalWhenNoInput);
 			MyGuiScreenTerminal.SwitchToControlPanelBlock((MyTerminalBlock)Static.switchTo);
+            
 			Static.switchTo = null;
 		}
 

@@ -155,7 +155,7 @@ namespace Rynchodon
 				case Base6Directions.Direction.Forward:
 					return block.LocalAABB.Size.Z;
 			}
-			VRage.Exceptions.ThrowIf<NotImplementedException>(true, "direction not implemented: " + direction);
+			//VRage.Exceptions.ThrowIf<NotImplementedException>(true, "direction not implemented: " + direction);
 			throw new Exception();
 		}
 
