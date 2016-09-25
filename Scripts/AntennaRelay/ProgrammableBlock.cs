@@ -48,7 +48,7 @@ namespace Rynchodon.AntennaRelay
             programmable_sendMessage.Name = new StringBuilder("Send Message");
             programmable_sendMessage.Icon = "Textures\\GUI\\Icons\\Actions\\Start.dds";
             programmable_sendMessage.ValidForGroups = false;
-            Action<IMyTerminalBlock> ProgrammableBlock_SendMessage = programmable_sendMessage.Action;
+            //Action<IMyTerminalBlock> ProgrammableBlock_SendMessage = programmable_sendMessage.Action;
             //programmable_sendMessage.Action = ProgrammableBlock_SendMessage;
 
             /*{

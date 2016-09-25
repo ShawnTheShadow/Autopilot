@@ -731,8 +731,9 @@ namespace Rynchodon.AntennaRelay
 				return;
 			}
 
-			//if (MyGuiScreenTerminal.GetCurrentScreen() == MyTerminalPageEnum.None && MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter && Static.MouseControls)
-            if (MyAPIGateway.Gui.GetCurrentScreen == MyTerminalPageEnum.None && MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter && Static.MouseControls)
+            
+           //if (MyGuiScreenTerminal.GetCurrentScreen() == MyTerminalPageEnum.None && MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter && Static.MouseControls)
+          if (MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter && Static.MouseControls)
 				CheckInput();
 
 			PositionWorld projectionCentre = m_offset.ToWorld(m_block);

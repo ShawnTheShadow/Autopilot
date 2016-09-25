@@ -7,6 +7,8 @@ using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using VRage.Game.ModAPI;
 using VRage.Utils;
+using Sandbox.ModAPI.Interfaces.Terminal;
+
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
@@ -52,14 +54,21 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-			MyTerminalControlTextbox<MyShipController> ctrl = new MyTerminalControlTextbox<MyShipController>("PanelName", MyStringId.GetOrCompute("Panel Name"), MyStringId.GetOrCompute("Text panel to get commands from"));
-			ctrl.Getter = block => m_panelName;
+            //MyTerminalControlTextbox<MyShipController> ctrl = new MyTerminalControlTextbox<MyShipController>("PanelName", MyStringId.GetOrCompute("Panel Name"), MyStringId.GetOrCompute("Text panel to get commands from"));
+            IMyTerminalControlTextbox ctrl = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, Sandbox.ModAPI.IMyShipController>("PanelName");
+            ctrl.Title = MyStringId.GetOrCompute("Panel Name");
+            ctrl.Tooltip = MyStringId.GetOrCompute("Text panel to get commands from");
+            ctrl.Getter = block => m_panelName;
 			ctrl.Setter = (block, value) => m_panelName = value;
 			controls.Add(ctrl);
 
-			ctrl = new MyTerminalControlTextbox<MyShipController>("SearchString", MyStringId.GetOrCompute("Search String"), MyStringId.GetOrCompute("String that occurs before commands"));
-			ctrl.Getter = block => m_identifier;
+			//ctrl = new MyTerminalControlTextbox<MyShipController>("SearchString", MyStringId.GetOrCompute("Search String"), MyStringId.GetOrCompute("String that occurs before commands"));
+            ctrl = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, Sandbox.ModAPI.IMyShipController>("SearchString");
+            ctrl.Title = MyStringId.GetOrCompute("Search String");
+            ctrl.Tooltip = MyStringId.GetOrCompute("String that occurs before commands");
+            ctrl.Getter = block => m_identifier;
 			ctrl.Setter = (block, value) => m_identifier = value;
+            controls.Add(ctrl);
 		}
 
 		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
@@ -82,7 +91,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			}
 
 			message = null;
-			return mover => VRage.Exceptions.ThrowIf<NotImplementedException>(true);
+            return mover => VRage.Exceptions.ThrowIf<NotImplementedException>(true);
 		}
 
 		protected override string TermToString()

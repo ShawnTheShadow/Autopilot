@@ -50,23 +50,33 @@ namespace Rynchodon.AntennaRelay
 			public char[] OptionsSeparators = { ',', ';', ':' };
 			public Logger s_logger = new Logger("TextPanel");
 			public List<long> s_detectedIds = new List<long>();
-			public List<MyTerminalControlCheckbox<MyTextPanel>> checkboxes = new List<MyTerminalControlCheckbox<MyTextPanel>>();
+			public List<IMyTerminalControlCheckbox> checkboxes = new List<IMyTerminalControlCheckbox>();
 		}
 
 		private static StaticVariables Static = new StaticVariables();
 
 		static TextPanel()
 		{
-			MyTerminalAction<MyTextPanel> textPanel_displayEntities = new MyTerminalAction<MyTextPanel>("DisplayEntities", new StringBuilder("Display Entities"), "Textures\\GUI\\Icons\\Actions\\Start.dds")
-			{
-				ValidForGroups = false,
-				ActionWithParameters = TextPanel_DisplayEntities
-			};
-			MyTerminalControlFactory.AddAction(textPanel_displayEntities);
+            IMyTerminalAction textPanel_displayEntities = MyAPIGateway.TerminalControls.CreateAction<IMyTextPanel>("DisplayEntities");
 
-			MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MyTextPanel>());
+            textPanel_displayEntities.Name = new StringBuilder("Display Entities");
+            textPanel_displayEntities.Icon = "Textures\\GUI\\Icons\\Actions\\Start.dds";
+            textPanel_displayEntities.ValidForGroups = false;
 
-			AddCheckbox("DisplayDetected", "Display Detected", "Write detected entities to the public text of the panel", Option.DisplayDetected);
+
+            //         MyTerminalAction<MyTextPanel> textPanel_displayEntities = new MyTerminalAction<MyTextPanel>("DisplayEntities", new StringBuilder("Display Entities"), "Textures\\GUI\\Icons\\Actions\\Start.dds")
+            //{
+            //	ValidForGroups = false,
+            //	ActionWithParameters = TextPanel_DisplayEntities
+            //};
+
+            //MyTerminalControlFactory.AddAction(textPanel_displayEntities);
+            MyAPIGateway.TerminalControls.AddAction<IMyTextPanel>(textPanel_displayEntities);
+            
+            //MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MyTextPanel>());
+           
+
+            AddCheckbox("DisplayDetected", "Display Detected", "Write detected entities to the public text of the panel", Option.DisplayDetected);
 			AddCheckbox("DisplayGPS", "Display GPS", "Write gps with detected entities", Option.GPS);
 			AddCheckbox("DisplayEntityId", "Display Entity ID", "Write entity ID with detected entities", Option.EntityId);
 			AddCheckbox("DisplayAutopilotStatus", "Display Autopilot Status", "Write the status of nearby Autopilots to the public text of the panel", Option.AutopilotStatus);
@@ -76,11 +86,16 @@ namespace Rynchodon.AntennaRelay
 
 		private static void AddCheckbox(string id, string title, string toolTip, Option opt)
 		{
-			MyTerminalControlCheckbox<MyTextPanel> control = new MyTerminalControlCheckbox<MyTextPanel>(id, MyStringId.GetOrCompute(title), MyStringId.GetOrCompute(toolTip));
-			IMyTerminalValueControl<bool> valueControl = control as IMyTerminalValueControl<bool>;
-			valueControl.Getter = block => GetOptionTerminal(block, opt);
-			valueControl.Setter = (block, value) => SetOptionTerminal(block, opt, value);
-			MyTerminalControlFactory.AddControl(control);
+            IMyTerminalControlCheckbox control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyTextPanel>(id);                
+            control.Title = MyStringId.GetOrCompute(title);
+            control.Tooltip = MyStringId.GetOrCompute(toolTip);
+
+   //         IMyTerminalValueControl<bool> valueControl = control as IMyTerminalValueControl<bool>;
+			//valueControl.Getter = block => GetOptionTerminal(block, opt);
+			//valueControl.Setter = (block, value) => SetOptionTerminal(block, opt, value);
+
+            MyAPIGateway.TerminalControls.AddControl<IMyTextPanel>(control);
+            
 			Static.checkboxes.Add(control);
 		}
 
@@ -91,14 +106,14 @@ namespace Rynchodon.AntennaRelay
 		}
 
 		/// <param name="args">EntityIds as long</param>
-		private static void TextPanel_DisplayEntities(MyFunctionalBlock block, ListReader<Sandbox.ModAPI.Ingame.TerminalActionParameter> args)
+		private static void TextPanel_DisplayEntities(IMyFunctionalBlock block, ListReader<Sandbox.ModAPI.Ingame.TerminalActionParameter> args)
 		{
 			Static.s_detectedIds.Clear();
 
 			for (int i = 0; i < args.Count; i++)
 			{
-				if (args[i].TypeCode != TypeCode.Int64)
-				{
+                if (args[i].TypeCode.ToString().Equals("11"))//  TypeCode.Int64)
+                {
 					Static.s_logger.debugLog("TerminalActionParameter # " + i + " is of wrong type, expected Int64, got " + args[i].TypeCode, Logger.severity.WARNING);
 					if (MyAPIGateway.Session.Player != null)
 						block.AppendCustomInfo("Failed to display entities:\nTerminalActionParameter #" + i + " is of wrong type, expected Int64 (AKA long), got " + args[i].TypeCode + '\n');

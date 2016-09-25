@@ -4,6 +4,7 @@ using Sandbox.ModAPI;
 using VRage;
 using VRage.Game;
 using VRageMath;
+using Sandbox.Game.World;
 
 namespace Rynchodon
 {
@@ -35,16 +36,17 @@ namespace Rynchodon
 
 		public SunProperties()
 		{
-			//MyObjectBuilder_EnvironmentDefinition sunDefinition = MyDefinitionManager.Static.EnvironmentDefinition.GetObjectBuilder() as MyObjectBuilder_EnvironmentDefinition;
-            MySunProperties sunDefinition = new MySunProperties();
-            DefSunDirection = sunDefinition.BaseSunDirectionNormalized;
+			MyObjectBuilder_EnvironmentDefinition sunDefinition = MyDefinitionManager.Static.EnvironmentDefinition.GetObjectBuilder() as MyObjectBuilder_EnvironmentDefinition;
+            //MyAPIGateway. sunDefinition = new MySunProperties();
+            DefSunDirection = sunDefinition.SunDirection;
 
 			SunRotationIntervalMinutes = MyAPIGateway.Session.SessionSettings.SunRotationIntervalMinutes;
 			EnableSunRotation = MyAPIGateway.Session.SessionSettings.EnableSunRotation;
-			mySunDirection = DefSunDirection;
+			//mySunDirection = DefSunDirection;
 
 			myLogger.debugLog("Definition SunDirection: " + mySunDirection + ", EnableSunRotation: " + EnableSunRotation + ", SunRotationIntervalMinutes: " + SunRotationIntervalMinutes, Logger.severity.INFO);
-			float azimuth, elevation; Vector3.GetAzimuthAndElevation(mySunDirection, out azimuth, out elevation);
+			float azimuth, elevation;
+            Vector3.GetAzimuthAndElevation(mySunDirection, out azimuth, out elevation);
 			myLogger.debugLog("azimuth: " + azimuth + ", elevation: " + elevation, Logger.severity.DEBUG);
 			Instance = this;
 		}
