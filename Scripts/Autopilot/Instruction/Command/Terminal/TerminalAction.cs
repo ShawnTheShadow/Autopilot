@@ -180,24 +180,30 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-			MyTerminalControlTextbox<MyShipController> textBox = new MyTerminalControlTextbox<MyShipController>("BlockName", MyStringId.GetOrCompute("Block name"),
-				MyStringId.GetOrCompute("Blocks with names containing this string will run the action."));
+            IMyTerminalControlTextbox textBox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("BlockName");
+            textBox.Title = MyStringId.GetOrCompute("Block name");
+            textBox.Tooltip = MyStringId.GetOrCompute("Blocks with names containing this string will run the action.");
 			textBox.Getter = block => m_targetBlock;
 			textBox.Setter = (block, value) => m_targetBlock = value;
 			controls.Add(textBox);
 
-			IMyTerminalControlListbox actionList = new MyTerminalControlListbox<MyShipController>("ActionList", MyStringId.GetOrCompute("Action"), MyStringId.NullOrEmpty);
+            IMyTerminalControlListbox actionList = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyShipController>("ActionList");
+            actionList.Title = MyStringId.GetOrCompute("Action");
+            actionList.Tooltip = MyStringId.NullOrEmpty;
 			actionList.ListContent = ListContent;
 			actionList.ItemSelected = ItemSelected;
 
-			MyTerminalControlButton<MyShipController> searchButton = new MyTerminalControlButton<MyShipController>("SearchButton", MyStringId.GetOrCompute("Search"),
-				MyStringId.GetOrCompute("Search for actions"), block => actionList.UpdateVisual());
+            IMyTerminalControlButton searchButton = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("SearchButton");
+            searchButton.Title = MyStringId.GetOrCompute("Search");
+            searchButton.Tooltip = MyStringId.GetOrCompute("Search for actions");
+            searchButton.Action = block => actionList.UpdateVisual();
 
 			controls.Add(searchButton);
 			controls.Add(actionList);
 
-			MyTerminalControlTextbox<MyShipController> actionParams = new MyTerminalControlTextbox<MyShipController>("ActionParams", MyStringId.GetOrCompute("Action Params"),
-				MyStringId.GetOrCompute("Comma separated list of parameters to pass to action"));
+            IMyTerminalControlTextbox actionParams = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("ActionParams");
+            actionParams.Title = MyStringId.GetOrCompute("Action Params");
+            actionParams.Tooltip = MyStringId.GetOrCompute("Comma separated list of parameters to pass to action");
 			actionParams.Getter = block => m_actionParams;
 			actionParams.Setter = (block, value) => m_actionParams = value;
 			controls.Add(actionParams);

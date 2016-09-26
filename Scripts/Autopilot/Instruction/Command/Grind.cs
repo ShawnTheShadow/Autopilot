@@ -44,12 +44,17 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			}
 		}
 
-		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
+		public override void AddControls(List<IMyTerminalControl> controls)
 		{
-			MyTerminalControlSlider<MyShipController> radius = new MyTerminalControlSlider<MyShipController>("Radius", MyStringId.GetOrCompute("Radius"), MyStringId.GetOrCompute(AddDescription));
-			radius.DefaultValue = 100f;
-			radius.Normalizer = Normalizer;
-			radius.Denormalizer = Denormalizer;
+            IMyTerminalControlSlider radius = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyShipController>("Radius");
+            radius.Title = MyStringId.GetOrCompute("Radius");
+            radius.Tooltip = MyStringId.GetOrCompute(AddDescription);
+            
+             
+            //ToFix these values
+			//radius.DefaultValue = 100f;
+			//radius.Normalizer = Normalizer;
+			//radius.Denormalizer = Denormalizer;
 			radius.Writer = (block, sb) => {
 				sb.Append(PrettySI.makePretty(m_radius));
 				sb.Append('m');

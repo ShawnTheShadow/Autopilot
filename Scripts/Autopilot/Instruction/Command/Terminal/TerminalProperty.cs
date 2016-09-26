@@ -52,18 +52,23 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-			MyTerminalControlTextbox<MyShipController> textBox = new MyTerminalControlTextbox<MyShipController>("BlockName", MyStringId.GetOrCompute("Block name"),
-				MyStringId.GetOrCompute("Blocks with names containing this string will have their property set."));
-			textBox.Getter = block => m_targetBlock;
+            IMyTerminalControlTextbox textBox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("BlockName");
+            textBox.Title = MyStringId.GetOrCompute("Block name");
+            textBox.Tooltip = MyStringId.GetOrCompute("Blocks with names containing this string will have their property set.");
+            textBox.Getter = block => m_targetBlock;
 			textBox.Setter = (block, value) => m_targetBlock = value;
 			controls.Add(textBox);
 
-			IMyTerminalControlListbox propertyList = new MyTerminalControlListbox<MyShipController>("PropertyList", MyStringId.GetOrCompute("Property"), MyStringId.NullOrEmpty);
+            IMyTerminalControlListbox propertyList = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyShipController>("PropertyList");
+            propertyList.Title = MyStringId.GetOrCompute("Property");
+            propertyList.Tooltip = MyStringId.NullOrEmpty;
 			propertyList.ListContent = ListContent;
 			propertyList.ItemSelected = ItemSelected;
 
-			MyTerminalControlButton<MyShipController> searchButton = new MyTerminalControlButton<MyShipController>("SearchButton", MyStringId.GetOrCompute("Search"),
-				MyStringId.GetOrCompute("Search for properties"), block => propertyList.UpdateVisual());
+            IMyTerminalControlButton searchButton = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("SearchButton");
+            searchButton.Title = MyStringId.GetOrCompute("Search");
+            searchButton.Tooltip = MyStringId.GetOrCompute("Search for properties");
+            searchButton.Action = block => propertyList.UpdateVisual();
 
 			controls.Add(searchButton);
 			controls.Add(propertyList);

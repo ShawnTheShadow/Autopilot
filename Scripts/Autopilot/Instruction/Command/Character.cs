@@ -5,6 +5,8 @@ using Rynchodon.Autopilot.Navigator;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using VRage.Utils;
+using Sandbox.ModAPI;
+using Sandbox.ModAPI.Interfaces.Terminal;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
@@ -40,8 +42,12 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-			MyTerminalControlTextbox<MyShipController> name = new MyTerminalControlTextbox<MyShipController>("CharName", MyStringId.GetOrCompute("Character Name"), MyStringId.NullOrEmpty);
-			name.Getter = block => target;
+            //MyTerminalControlTextbox<MyShipController> name = new MyTerminalControlTextbox<MyShipController>("CharName", MyStringId.GetOrCompute("Character Name"), MyStringId.NullOrEmpty);
+            IMyTerminalControlTextbox name = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("CharName");
+            name.Title = MyStringId.GetOrCompute("Character Name");
+            name.Tooltip = MyStringId.NullOrEmpty;
+
+            name.Getter = block => target;
 			name.Setter = (block, value) => target = value;
 			controls.Add(name);
 		}

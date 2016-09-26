@@ -3,6 +3,8 @@ using System.Text;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using VRage.Utils;
+using Sandbox.ModAPI.Interfaces.Terminal;
+using Sandbox.ModAPI;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
@@ -23,7 +25,9 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		protected override void AddValueControl(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-			MyTerminalControlTextbox<MyShipController> valueBox = new MyTerminalControlTextbox<MyShipController>("ValueBox", MyStringId.GetOrCompute("Value"), MyStringId.GetOrCompute("Value to set propety to"));
+            IMyTerminalControlTextbox valueBox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("ValueBox");
+            valueBox.Title = MyStringId.GetOrCompute("Value");
+            valueBox.Tooltip = MyStringId.GetOrCompute("Value to set propety to");
 			valueBox.Getter = block => m_textBox;
 			valueBox.Setter = (block, value) => {
 				m_textBox = value;

@@ -1,6 +1,4 @@
 ﻿using System.Collections.Generic;
-using Sandbox.Game.Entities;
-using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using VRage.Game.ModAPI;
@@ -10,10 +8,10 @@ using VRageMath;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
-	/// <summary>
-	/// Create a GOLIS from the GPS list.
-	/// </summary>
-	public class GolisGps : GolisCoordinate
+    /// <summary>
+    /// Create a GOLIS from the GPS list.
+    /// </summary>
+    public class GolisGps : GolisCoordinate
 	{
 
 		public override ACommand Clone()
@@ -38,8 +36,14 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<IMyTerminalControl> controls)
 		{
-			IMyTerminalControlListbox gpsList = new MyTerminalControlListbox<MyShipController>("GolisGpsList", MyStringId.GetOrCompute("GPS list"), MyStringId.NullOrEmpty, false, 18);
-			gpsList.ListContent = FillWaypointList;
+            //IMyTerminalControlListbox gpsList = new MyTerminalControlListbox<MyShipController>("GolisGpsList", MyStringId.GetOrCompute("GPS list"), MyStringId.NullOrEmpty, false, 18);
+            IMyTerminalControlListbox gpsList = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyShipController>("GolisGpsList");
+            gpsList.Title = MyStringId.GetOrCompute("GPS list");
+            gpsList.Tooltip = MyStringId.NullOrEmpty;
+            gpsList.Multiselect = false;
+            gpsList.VisibleRowsCount = 18;           
+
+            gpsList.ListContent = FillWaypointList;
 			gpsList.ItemSelected = OnItemSelected;
 			controls.Add(gpsList);
 		}

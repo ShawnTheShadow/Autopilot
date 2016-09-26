@@ -51,10 +51,12 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-			MyTerminalControlSlider<MyShipController> distance = new MyTerminalControlSlider<MyShipController>("Distance", MyStringId.GetOrCompute("Distance"), MyStringId.GetOrCompute(AddDescription));
-			distance.DefaultValue = 100f;
-			distance.Normalizer = Normalizer;
-			distance.Denormalizer = Denormalizer;
+            IMyTerminalControlSlider distance = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyShipController>("Distance");
+            distance.Title = MyStringId.GetOrCompute("Distance");
+            distance.Tooltip = MyStringId.GetOrCompute(AddDescription);
+			//distance.DefaultValue = 100f;
+			//distance.Normalizer = Normalizer;
+			//distance.Denormalizer = Denormalizer;
 			distance.Writer = (block, sb) => {
 				sb.Append(PrettySI.makePretty(m_distance));
 				sb.Append('m');

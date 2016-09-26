@@ -6,6 +6,7 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using VRage.Utils;
+using Sandbox.ModAPI;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
@@ -50,9 +51,17 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-			IMyTerminalControlCheckbox asteroid = new MyTerminalControlCheckbox<MyShipController>("OrbitAsteroid", MyStringId.GetOrCompute("Asteroid"), MyStringId.GetOrCompute("Orbit the nearest asteroid"));
-			IMyTerminalControlCheckbox planet = new MyTerminalControlCheckbox<MyShipController>("OrbitPlanet", MyStringId.GetOrCompute("Planet"), MyStringId.GetOrCompute("Orbit the nearest planet"));
-			MyTerminalControlTextbox<MyShipController> gridName = new MyTerminalControlTextbox<MyShipController>("GridName", MyStringId.GetOrCompute("Grid"), MyStringId.GetOrCompute("Orbit the specified grid"));
+            IMyTerminalControlCheckbox asteroid = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyShipController>("OrbitAsteroid");
+            asteroid.Title = MyStringId.GetOrCompute("Asteroid");
+            asteroid.Tooltip = MyStringId.GetOrCompute("Orbit the nearest asteroid");
+
+            IMyTerminalControlCheckbox planet = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyShipController>("OrbitPlanet");
+            planet.Title = MyStringId.GetOrCompute("Planet");
+            planet.Tooltip = MyStringId.GetOrCompute("Orbit the nearest planet");
+
+            IMyTerminalControlTextbox gridName = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("GridName");
+            gridName.Title = MyStringId.GetOrCompute("Grid");
+            gridName.Tooltip = MyStringId.GetOrCompute("Orbit the specified grid");
 
 			asteroid.Getter = block => m_target == Target.asteroid;
 			asteroid.Setter = (block, value) => {

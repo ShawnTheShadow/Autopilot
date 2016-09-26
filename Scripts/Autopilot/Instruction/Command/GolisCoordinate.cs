@@ -7,6 +7,7 @@ using Sandbox.Game.Gui;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using VRage.Utils;
 using VRageMath;
+using Sandbox.ModAPI;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
@@ -50,21 +51,30 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<IMyTerminalControl> controls)
 		{
-			MyTerminalControlTextbox<MyShipController> control;
-			control = new MyTerminalControlTextbox<MyShipController>("GolisCoordX", MyStringId.GetOrCompute("X Coordinate"), MyStringId.NullOrEmpty);
-			AddGetSet(control, 0);
+			IMyTerminalControlTextbox control;
+			//control = new MyTerminalControlTextbox<MyShipController>("GolisCoordX", MyStringId.GetOrCompute("X Coordinate"), MyStringId.NullOrEmpty);
+            control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("GolisCoordX");
+            control.Title = MyStringId.GetOrCompute("X Coordinate");
+            control.Tooltip = MyStringId.NullOrEmpty;
+            AddGetSet(control, 0);
 			controls.Add(control);
 
-			control = new MyTerminalControlTextbox<MyShipController>("GolisCoordY", MyStringId.GetOrCompute("Y Coordinate"), MyStringId.NullOrEmpty);
-			AddGetSet(control, 1);
+			//control = new MyTerminalControlTextbox<MyShipController>("GolisCoordY", MyStringId.GetOrCompute("Y Coordinate"), MyStringId.NullOrEmpty);
+            control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("GolisCoordY");
+            control.Title = MyStringId.GetOrCompute("Y Coordinate");
+            control.Tooltip = MyStringId.NullOrEmpty;
+            AddGetSet(control, 1);
 			controls.Add(control);
 
-			control = new MyTerminalControlTextbox<MyShipController>("GolisCoordZ", MyStringId.GetOrCompute("Z Coordinate"), MyStringId.NullOrEmpty);
-			AddGetSet(control, 2);
+			//control = new MyTerminalControlTextbox<MyShipController>("GolisCoordZ", MyStringId.GetOrCompute("Z Coordinate"), MyStringId.NullOrEmpty);
+            control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("GolisCoordZ");
+            control.Title = MyStringId.GetOrCompute("Z Coordinate");
+            control.Tooltip = MyStringId.NullOrEmpty;
+            AddGetSet(control, 2);
 			controls.Add(control);
 		}
 
-		private void AddGetSet(MyTerminalControlTextbox<MyShipController> control, int index)
+		private void AddGetSet(IMyTerminalControlTextbox control, int index)
 		{
 			control.Getter = block => new StringBuilder(destination.GetDim(index).ToString());
 			control.Setter = (block, strBuild) => {

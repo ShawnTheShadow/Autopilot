@@ -189,7 +189,7 @@ namespace Rynchodon.Autopilot.Movement
 		/// <param name="destVelocity">The speed of the destination</param>
 		/// <param name="landing">Puts an emphasis on not overshooting the target.</param>
 		/// Do not remove this method, Vector3 can be implicitly converted to Vector3D, suppressing the warning.
-		[Obsolete("Navigators should use double precision")]
+		//[Obsolete("Navigators should use double precision")]
 		public void CalcMove(PseudoBlock block, Vector3 destPoint, Vector3 destVelocity, bool landing = false)
 		{
 			CalcMove(block, (Vector3D)destPoint, destVelocity, landing);

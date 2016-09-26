@@ -42,14 +42,22 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<IMyTerminalControl> controls)
 		{
-			MyTerminalControlSlider<MyShipController> 
-				hours = new MyTerminalControlSlider<MyShipController>("WaitForHours", MyStringId.GetOrCompute("Hours"), MyStringId.GetOrCompute("Hours to wait for")),
-				minutes = new MyTerminalControlSlider<MyShipController>("WaitForMinutes", MyStringId.GetOrCompute("Minutes"), MyStringId.GetOrCompute("Minutes to wait for")),
-				seconds = new MyTerminalControlSlider<MyShipController>("WaitForSeconds", MyStringId.GetOrCompute("Seconds"), MyStringId.GetOrCompute("Seconds to wait for"));
 
-			hours.DefaultValue = 0f;
-			hours.Normalizer = Normalizer;
-			hours.Denormalizer = Denormalizer;
+            IMyTerminalControlSlider hours = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyShipController>("WaitForHours");
+            hours.Title = MyStringId.GetOrCompute("Hours");
+            hours.Tooltip = MyStringId.GetOrCompute("Hours to wait for");
+
+            IMyTerminalControlSlider minutes = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyShipController>("WaitForMinutes");
+            minutes.Title = MyStringId.GetOrCompute("Minutes");
+            minutes.Tooltip = MyStringId.GetOrCompute("Minutes to wait for");
+
+            IMyTerminalControlSlider seconds = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyShipController>("WaitForSeconds");
+            seconds.Title = MyStringId.GetOrCompute("Seconds");
+            seconds.Tooltip = MyStringId.GetOrCompute("Seconds to wait for");
+
+			//hours.DefaultValue = 0f;
+			//hours.Normalizer = Normalizer;
+			//hours.Denormalizer = Denormalizer;
 			hours.Writer = Writer;
 			IMyTerminalValueControl<float> valueControl = hours;
 			valueControl.Getter = block => duration.Hours;
@@ -60,9 +68,9 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			};
 			controls.Add(hours);
 
-			minutes.DefaultValue = 0f;
-			minutes.Normalizer = Normalizer;
-			minutes.Denormalizer = Denormalizer;
+			//minutes.DefaultValue = 0f;
+			//minutes.Normalizer = Normalizer;
+			//minutes.Denormalizer = Denormalizer;
 			minutes.Writer = Writer;
 			valueControl = minutes;
 			valueControl.Getter = block => duration.Minutes;
@@ -73,9 +81,9 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			};
 			controls.Add(minutes);
 
-			seconds.DefaultValue = 0f;
-			seconds.Normalizer = Normalizer;
-			seconds.Denormalizer = Denormalizer;
+			//seconds.DefaultValue = 0f;
+			//seconds.Normalizer = Normalizer;
+			//seconds.Denormalizer = Denormalizer;
 			seconds.Writer = Writer;
 			valueControl = seconds;
 			valueControl.Getter = block => duration.Seconds;

@@ -93,10 +93,13 @@ namespace Rynchodon.Autopilot.Instruction.Command
 		{
 			if (!m_addingResponse)
 			{
-				MyTerminalControlSlider<MyShipController> range = new MyTerminalControlSlider<MyShipController>("RangeSlider", MyStringId.GetOrCompute("Range"), 
-					MyStringId.GetOrCompute("How close enemy needs to be for autopilot to respond to it. Zero indicates infinite range."));
-				range.Normalizer = Normalizer;
-				range.Denormalizer = Denormalizer;
+				//MyTerminalControlSlider<MyShipController> range = new MyTerminalControlSlider<MyShipController>("RangeSlider", MyStringId.GetOrCompute("Range"), 
+				//MyStringId.GetOrCompute("How close enemy needs to be for autopilot to respond to it. Zero indicates infinite range."));
+                IMyTerminalControlSlider range = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyShipController>("RangeSlider");
+                range.Title = MyStringId.GetOrCompute("Range");
+                range.Tooltip = MyStringId.GetOrCompute("How close enemy needs to be for autopilot to respond to it. Zero indicates infinite range.");
+    //            range.Normalizer = Normalizer;
+				//range.Denormalizer = Denormalizer;
 				range.Writer = (block, sb) => {
 					sb.Append(PrettySI.makePretty(m_range));
 					sb.Append('m');
@@ -106,8 +109,12 @@ namespace Rynchodon.Autopilot.Instruction.Command
 				valueControler.Setter = (block, value) => m_range = value;
 				controls.Add(range);
 
-				MyTerminalControlTextbox<MyShipController> enemyId = new MyTerminalControlTextbox<MyShipController>("EnemyId", MyStringId.GetOrCompute("Enemy Entity ID"), MyStringId.GetOrCompute("If set, only target an enemy with this entity ID"));
-				enemyId.Getter = block => new StringBuilder(m_enemyId.ToString());
+                //MyTerminalControlTextbox<MyShipController> enemyId = new MyTerminalControlTextbox<MyShipController>("EnemyId", MyStringId.GetOrCompute("Enemy Entity ID"), MyStringId.GetOrCompute("If set, only target an enemy with this entity ID"));
+                IMyTerminalControlTextbox enemyId = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("EnemyId");
+                enemyId.Title = MyStringId.GetOrCompute("Enemy Entity ID");
+                enemyId.Tooltip = MyStringId.GetOrCompute("If set, only target an enemy with this entity ID");
+
+                enemyId.Getter = block => new StringBuilder(m_enemyId.ToString());
 				enemyId.Setter = (block, value) => {
 					if (!long.TryParse(value.ToString(), out m_enemyId))
 						m_enemyId = -1L;
@@ -117,19 +124,49 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 			if (m_responseListbox == null)
 			{
-				m_responseListbox = new MyTerminalControlListbox<MyShipController>("Responses", MyStringId.GetOrCompute("Responses"), MyStringId.NullOrEmpty);
-				m_responseListbox.ListContent = ListContent;
+                //m_responseListbox = new MyTerminalControlListbox<MyShipController>("Responses", MyStringId.GetOrCompute("Responses"), MyStringId.NullOrEmpty);
+                m_responseListbox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyShipController>("Responses");
+                m_responseListbox.Title = MyStringId.GetOrCompute("Responses");
+                m_responseListbox.Tooltip = MyStringId.NullOrEmpty;
+
+                m_responseListbox.ListContent = ListContent;
 				m_responseListbox.ItemSelected = ItemSelected;
 			}
 			controls.Add(m_responseListbox);
 
 			if (!m_addingResponse)
 			{
-				controls.Add(new MyTerminalControlButton<MyShipController>("AddResponse", MyStringId.GetOrCompute("Add Response"), MyStringId.NullOrEmpty, AddResponse));
-				controls.Add(new MyTerminalControlButton<MyShipController>("RemoveResponse", MyStringId.GetOrCompute("Remove Response"), MyStringId.NullOrEmpty, RemoveResponse));
-				controls.Add(new MyTerminalControlButton<MyShipController>("MoveResponseUp", MyStringId.GetOrCompute("Move Response Up"), MyStringId.NullOrEmpty, MoveResponseUp));
-				controls.Add(new MyTerminalControlButton<MyShipController>("MoveResponseDown", MyStringId.GetOrCompute("Move Response Down"), MyStringId.NullOrEmpty, MoveResponseDown));
-			}
+                IMyTerminalControlButton ctrl_btn;
+
+               // controls.Add(new MyTerminalControlButton<MyShipController>("AddResponse", MyStringId.GetOrCompute("Add Response"), MyStringId.NullOrEmpty, AddResponse));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("AddResponse");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Add Response");
+                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = AddResponse;
+                    controls.Add(ctrl_btn);
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("RemoveResponse", MyStringId.GetOrCompute("Remove Response"), MyStringId.NullOrEmpty, RemoveResponse));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("RemoveResponse");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Remove Response");
+                    ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = RemoveResponse;
+                     controls.Add(ctrl_btn);
+                
+                //controls.Add(new MyTerminalControlButton<MyShipController>("MoveResponseUp", MyStringId.GetOrCompute("Move Response Up"), MyStringId.NullOrEmpty, MoveResponseUp));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("MoveResponseUp");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Move Response Up");
+                    ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = MoveResponseUp;
+                     controls.Add(ctrl_btn);
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("MoveResponseDown", MyStringId.GetOrCompute("Move Response Down"), MyStringId.NullOrEmpty, MoveResponseDown));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("MoveResponseDown");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Move Response Down");
+                    ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = MoveResponseDown; ;
+                     controls.Add(ctrl_btn);
+
+            }
 		}
 
 		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)

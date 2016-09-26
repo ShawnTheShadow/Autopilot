@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using System.Text;
 using Rynchodon.Autopilot.Navigator;
-using Sandbox.Game.Entities;
-using Sandbox.Game.Gui;
 using VRage.Utils;
+using Sandbox.ModAPI.Interfaces.Terminal;
+using Sandbox.ModAPI;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
-	public class GridDestination : ACommand
+    public class GridDestination : ACommand
 	{
 
 		private StringBuilder m_gridName;
@@ -40,7 +40,9 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-			MyTerminalControlTextbox<MyShipController> gridName = new MyTerminalControlTextbox<MyShipController>("GridName", MyStringId.GetOrCompute("Grid Name"), MyStringId.NullOrEmpty);
+            IMyTerminalControlTextbox gridName = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("GridName");
+            gridName.Title = MyStringId.GetOrCompute("Grid Name");
+            gridName.Tooltip = MyStringId.NullOrEmpty;
 			gridName.Getter = block => m_gridName;
 			gridName.Setter = (block, value) => m_gridName = value;
 			controls.Add(gridName);

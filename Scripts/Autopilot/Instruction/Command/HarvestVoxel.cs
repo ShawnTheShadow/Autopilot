@@ -128,7 +128,9 @@ namespace Rynchodon.Autopilot.Instruction.Command
 		{
 			if (m_oreListbox == null)
 			{
-				m_oreListbox = new MyTerminalControlListbox<MyShipController>("Ores", MyStringId.GetOrCompute("Ores"), MyStringId.NullOrEmpty);
+                m_oreListbox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyShipController>("Ores");
+                m_oreListbox.Title = MyStringId.GetOrCompute("Ores");
+                m_oreListbox.Tooltip = MyStringId.NullOrEmpty;
 				m_oreListbox.ListContent = ListContent;
 				m_oreListbox.ItemSelected = ItemSelected;
 			}
@@ -136,11 +138,37 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 			if (!m_addingOres)
 			{
-				controls.Add(new MyTerminalControlButton<MyShipController>("AddOre", MyStringId.GetOrCompute("Add Ore"), MyStringId.NullOrEmpty, AddOre));
-				controls.Add(new MyTerminalControlButton<MyShipController>("RemoveOre", MyStringId.GetOrCompute("Remove Ore"), MyStringId.NullOrEmpty, RemoveOre));
-				controls.Add(new MyTerminalControlButton<MyShipController>("MoveOreUp", MyStringId.GetOrCompute("Move Ore Up"), MyStringId.NullOrEmpty, MoveOreUp));
-				controls.Add(new MyTerminalControlButton<MyShipController>("MoveOreDown", MyStringId.GetOrCompute("Move Ore Down"), MyStringId.NullOrEmpty, MoveOreDown));
-			}
+                IMyTerminalControlButton ctrl_btn;
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("AddOre", MyStringId.GetOrCompute("Add Ore"), MyStringId.NullOrEmpty, AddOre));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl< IMyTerminalControlButton, IMyShipController>("AddOre");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Add Ore");
+                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = AddOre;
+                controls.Add(ctrl_btn);
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("RemoveOre", MyStringId.GetOrCompute("Remove Ore"), MyStringId.NullOrEmpty, RemoveOre));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("RemoveOre");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Remove Ore");
+                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = RemoveOre;
+                controls.Add(ctrl_btn);
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("MoveOreUp", MyStringId.GetOrCompute("Move Ore Up"), MyStringId.NullOrEmpty, MoveOreUp));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("MoveOreUp");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Move Ore Up");
+                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = MoveOreUp;
+                    controls.Add(ctrl_btn);
+
+                //controls.Add(new MyTerminalControlButton<MyShipController>("MoveOreDown", MyStringId.GetOrCompute("Move Ore Down"), MyStringId.NullOrEmpty, MoveOreDown));
+                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("MoveOreDown");
+                ctrl_btn.Title = MyStringId.GetOrCompute("Move Ore Down");
+                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
+                ctrl_btn.Action = MoveOreDown;
+                    controls.Add(ctrl_btn); 
+
+            }
 		}
 
 		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)

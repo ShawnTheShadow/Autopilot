@@ -32,7 +32,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		protected override void AddValueControl(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-			IMyTerminalControlColor colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, Sandbox.ModAPI.Ingame.IMyShipController>("ColourValue");
+			IMyTerminalControlColor colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, IMyShipController>("ColourValue");
 			colour.Title = MyStringId.GetOrCompute("Value");
 			colour.Tooltip = MyStringId.GetOrCompute("Value to set propety to");
 			colour.Getter = (block) => m_value;
@@ -42,11 +42,15 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			};
 			controls.Add(colour);
 
-			MyTerminalControlSlider<MyShipController> alpha = new MyTerminalControlSlider<MyShipController>("AlphaChannel", MyStringId.GetOrCompute("A"), MyStringId.NullOrEmpty);
-			alpha.DefaultValue = 255f;
-			alpha.Normalizer = Normalizer;
-			alpha.Denormalizer = Denormalizer;
-			alpha.Writer = (block, sb) => sb.Append(m_value.A);
+            IMyTerminalControlSlider alpha = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyShipController>("AlphaChannel");
+            alpha.Title = MyStringId.GetOrCompute("A");
+            alpha.Tooltip = MyStringId.NullOrEmpty;
+			//alpha.DefaultValue = 255f;
+			//alpha.Normalizer = Normalizer;
+			//alpha.Denormalizer = Denormalizer;
+            alpha.SetDualLogLimits(0f, 255f, 255f);
+
+            alpha.Writer = (block, sb) => sb.Append(m_value.A);
 			IMyTerminalValueControl<float> valueControl = alpha;
 			valueControl.Getter = block => m_value.A;
 			valueControl.Setter = (block, value) => {

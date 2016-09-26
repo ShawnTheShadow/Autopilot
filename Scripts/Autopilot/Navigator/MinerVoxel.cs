@@ -150,8 +150,10 @@ namespace Rynchodon.Autopilot.Navigator
 							break;
 						}
 					default:
-						VRage.Exceptions.ThrowIf<NotImplementedException>(true, "State not implemented: " + value);
-						break;
+						//VRage.Exceptions.ThrowIf<NotImplementedException>(true, "State not implemented: " + value);
+                        throw new Exception();
+
+                        break;
 				}
 				m_logger.debugLog("Current target: " + m_currentTarget + ", current position: " + m_navDrill.WorldPosition);
 				m_mover.StopMove();
@@ -384,8 +386,10 @@ namespace Rynchodon.Autopilot.Navigator
 
 					break;
 				default:
-					VRage.Exceptions.ThrowIf<NotImplementedException>(true, "State: " + m_state);
-					break;
+//					VRage.Exceptions.ThrowIf<NotImplementedException>(true, "State: " + m_state);
+                    throw new Exception();
+
+                    break;
 			}
 			MoveCurrent();
 		}

@@ -63,10 +63,10 @@ namespace Rynchodon.Weapons
 			public ITerminalProperty<bool> TPro_Shoot;
 
 			public int indexShoot;
-			public MyTerminalControlOnOffSwitch<MyUserControllableGun> armsTargeting;
-			public MyTerminalControlOnOffSwitch<MyUserControllableGun> motorTurret;
-			public List<MyTerminalControl<MyUserControllableGun>> sharedControls = new List<MyTerminalControl<MyUserControllableGun>>();
-			public List<MyTerminalControl<MyUserControllableGun>> fixedControls = new List<MyTerminalControl<MyUserControllableGun>>();
+			public IMyTerminalControlOnOffSwitch armsTargeting;
+			public IMyTerminalControlOnOffSwitch motorTurret;
+			public List<IMyTerminalControl> sharedControls = new List<IMyTerminalControl>();
+			public List<IMyTerminalControl> fixedControls = new List<IMyTerminalControl>();
 			public TerminalTextBox<long> termControlEntityId;
 		}
 
@@ -74,8 +74,10 @@ namespace Rynchodon.Weapons
 
 		static WeaponTargeting()
 		{
-			// When we get controls later, SE will create a list if there is none, which will prevent MyLargeTurretBase from creating the controls.
-			if (!MyTerminalControlFactory.AreControlsCreated<MyLargeTurretBase>())
+            // When we get controls later, SE will create a list if there is none, which will prevent MyLargeTurretBase from creating the controls.
+            List<IMyTerminalControl> created_controls = new List<IMyTerminalControl>();
+            MyAPIGateway.TerminalControls.GetControls<IMyLargeTurretBase>(out created_controls);
+			if (created_controls.Count == 0)
 			{
 				Static.logger.debugLog("forcing creation of turret controls");
 
@@ -84,14 +86,16 @@ namespace Rynchodon.Weapons
 				MyEntity grid = MyEntities.CreateFromObjectBuilder(gridBuilder);
 			}
 
-			var controls = MyTerminalControlFactory.GetControls(typeof(MyUserControllableGun));
+            List<IMyTerminalControl> controls = new List<IMyTerminalControl>();
+            MyAPIGateway.TerminalControls.GetControls<IMyUserControllableGun>(out controls);
+           // MyTerminalControlFactory.GetControls(typeof(MyUserControllableGun));
 
 			//Static.logger.debugLog("controls: " + controls);
 			//Static.logger.debugLog("control count: " + controls.Count);
 
 			// find the current position of shoot On/Off
 			int currentIndex = 0;
-			foreach (ITerminalControl control in MyTerminalControlFactory.GetControls(typeof(MyUserControllableGun)))
+			foreach (IMyTerminalControl control in controls)
 			{
 				if (control.Id == "Shoot")
 				{
@@ -101,59 +105,73 @@ namespace Rynchodon.Weapons
 				currentIndex++;
 			}
 
-			//Static.logger.debugLog("shoot index: " + Static.indexShoot);
+            IMyTerminalControlSeparator seperator_ctrl;
+            //Static.logger.debugLog("shoot index: " + Static.indexShoot);
+            seperator_ctrl = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyUserControllableGun>("sep");
+			Static.sharedControls.Add(seperator_ctrl);
 
-			Static.sharedControls.Add(new MyTerminalControlSeparator<MyUserControllableGun>());
-
-			Static.armsTargeting = new MyTerminalControlOnOffSwitch<MyUserControllableGun>("ArmsTargeting", MyStringId.GetOrCompute("ARMS Targeting"), MyStringId.GetOrCompute("ARMS will control this turret"));
+            Static.armsTargeting = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyUserControllableGun>("ArmsTargeting");
+            Static.armsTargeting.Title = MyStringId.GetOrCompute("ARMS Targeting");
+            Static.armsTargeting.Tooltip = MyStringId.GetOrCompute("ARMS will control this turret");
 			AddGetSet(Static.armsTargeting, TargetingFlags.ArmsEnabled);
 
-			Static.motorTurret = new MyTerminalControlOnOffSwitch<MyUserControllableGun>("RotorTurret", MyStringId.GetOrCompute("Rotor-Turret"), MyStringId.GetOrCompute("ARMS will treat the weapon as part of a rotor-turret"));
-			AddGetSet(Static.motorTurret, TargetingFlags.Turret);
+            Static.motorTurret = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyUserControllableGun>("RotorTurret");
+            Static.motorTurret.Title = MyStringId.GetOrCompute("Rotor-Turret");
+            Static.motorTurret.Tooltip = MyStringId.GetOrCompute("ARMS will treat the weapon as part of a rotor-turret");
 
-			MyTerminalControlCheckbox<MyUserControllableGun> functional = new MyTerminalControlCheckbox<MyUserControllableGun>("TargetFunctional", MyStringId.GetOrCompute("Target Functional"),
-				MyStringId.GetOrCompute("ARMS will target blocks that are functional, not just blocks that are working"));
+            AddGetSet(Static.motorTurret, TargetingFlags.Turret);
+
+            IMyTerminalControlCheckbox functional = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyUserControllableGun>("TargetFunctional");
+            functional.Title = MyStringId.GetOrCompute("Target Functional");
+			functional.Tooltip = MyStringId.GetOrCompute("ARMS will target blocks that are functional, not just blocks that are working");
 			AddGetSet(functional, TargetingFlags.Functional);
 			Static.sharedControls.Add(functional);
 
-			MyTerminalControlCheckbox<MyUserControllableGun> preserve = new MyTerminalControlCheckbox<MyUserControllableGun>("PreserveEnemy", MyStringId.GetOrCompute("Preserve Enemy"),
-				MyStringId.GetOrCompute("ARMS will not shoot through hostile blocks to destroy targets"));
+            IMyTerminalControlCheckbox preserve = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyUserControllableGun>("PreserveEnemy");
+            preserve.Title = MyStringId.GetOrCompute("Preserve Enemy");
+			preserve.Tooltip = MyStringId.GetOrCompute("ARMS will not shoot through hostile blocks to destroy targets");
 			AddGetSet(preserve, TargetingFlags.Preserve);
 			Static.sharedControls.Add(preserve);
 
-			MyTerminalControlCheckbox<MyUserControllableGun> destroy = new MyTerminalControlCheckbox<MyUserControllableGun>("DestroyBlocks", MyStringId.GetOrCompute("Destroy Blocks"),
-				MyStringId.GetOrCompute("ARMS will destroy every terminal block"));
+            IMyTerminalControlCheckbox destroy = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyUserControllableGun>("DestroyBlocks");
+            destroy.Title = MyStringId.GetOrCompute("Destroy Blocks");
+            destroy.Tooltip = MyStringId.GetOrCompute("ARMS will destroy every terminal block");
 			AddGetSet(destroy, TargetType.Destroy);
 			Static.sharedControls.Add(destroy);
 
-			MyTerminalControlCheckbox<MyUserControllableGun> laser = new MyTerminalControlCheckbox<MyUserControllableGun>("ShowLaser", MyStringId.GetOrCompute("Show Laser"),
-				MyStringId.GetOrCompute("Everything is better with lasers!"));
+            IMyTerminalControlCheckbox laser = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyUserControllableGun>("ShowLaser");
+            laser.Title = MyStringId.GetOrCompute("Show Laser");
+			laser.Tooltip = MyStringId.GetOrCompute("Everything is better with lasers!");
 			AddGetSet(laser, WeaponFlags.Laser);
 			Static.sharedControls.Add(laser);
 
-			Static.sharedControls.Add(new MyTerminalControlSeparator<MyUserControllableGun>());
+			Static.sharedControls.Add(seperator_ctrl);
 
-			MyTerminalControlTextbox<MyUserControllableGun> textBox = new MyTerminalControlTextbox<MyUserControllableGun>("TargetBlocks", MyStringId.GetOrCompute("Target Blocks"),
-				MyStringId.GetOrCompute("Comma separated list of blocks to target"));
+            IMyTerminalControlTextbox textBox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyUserControllableGun>("TargetBlocks");
+            textBox.Title = MyStringId.GetOrCompute("Target Blocks");
+			textBox.Tooltip = MyStringId.GetOrCompute("Comma separated list of blocks to target");
 			IMyTerminalValueControl<StringBuilder> valueControl = textBox;
 			valueControl.Getter = GetBlockList;
 			valueControl.Setter = SetBlockList;
 			Static.sharedControls.Add(textBox);
 
-			MyTerminalControlCheckbox<MyUserControllableGun> targetById = new MyTerminalControlCheckbox<MyUserControllableGun>("TargetByEntityId", MyStringId.GetOrCompute("Target by Entity ID"),
-				MyStringId.GetOrCompute("Use ID of an entity for targeting"));
+            IMyTerminalControlCheckbox targetById = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyUserControllableGun>("TargetByEntityId");
+            targetById.Title = MyStringId.GetOrCompute("Target by Entity ID");
+			targetById.Tooltip = MyStringId.GetOrCompute("Use ID of an entity for targeting");
 			AddGetSet(targetById, WeaponFlags.EntityId);
 			Static.sharedControls.Add(targetById);
 
-			textBox = new MyTerminalControlTextbox<MyUserControllableGun>("EntityId", MyStringId.GetOrCompute("Target Entity ID"),
-				MyStringId.GetOrCompute("ID of entity to target"));
+            textBox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyUserControllableGun>("EntityId");
+            textBox.Title = MyStringId.GetOrCompute("Target Entity ID");
+			textBox.Tooltip = MyStringId.GetOrCompute("ID of entity to target");
 			textBox.Visible = block => GetEnum(block, WeaponFlags.EntityId);
 			valueControl = textBox;
 			Static.termControlEntityId = new TerminalTextBox<long>(textBox, valueId_entityId, SetTargetEntity);
 			Static.sharedControls.Add(textBox);
 
-			MyTerminalControlCheckbox<MyUserControllableGun> targetGolis = new MyTerminalControlCheckbox<MyUserControllableGun>("TargetByGps", MyStringId.GetOrCompute("Target by GPS"),
-			MyStringId.GetOrCompute("Use GPS for targeting"));
+            IMyTerminalControlCheckbox targetGolis = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyUserControllableGun> ("TargetByGps");
+            targetGolis.Title = MyStringId.GetOrCompute("Target by GPS");
+			targetGolis.Tooltip = MyStringId.GetOrCompute("Use GPS for targeting");
 			AddGetSet(targetGolis, WeaponFlags.Golis);
 			targetGolis.Visible = Guided.GuidedMissileLauncher.IsGuidedMissileLauncher;
 			Static.sharedControls.Add(targetGolis);
@@ -165,14 +183,14 @@ namespace Rynchodon.Weapons
 			gpsList.Visible = block => GetEnum(block, WeaponFlags.Golis) && Guided.GuidedMissileLauncher.IsGuidedMissileLauncher((IMyCubeBlock)block);
 			gpsList.ListContent = FillGpsList;
 			gpsList.ItemSelected = OnGpsListItemSelected;
-			Static.sharedControls.Add((MyTerminalControl<MyUserControllableGun>)gpsList);
+			Static.sharedControls.Add((IMyTerminalControl)gpsList);
 
-			Static.fixedControls.Add(new MyTerminalControlSeparator<MyUserControllableGun>());
+			Static.fixedControls.Add(seperator_ctrl);
 
-			MyTerminalControlSlider<MyUserControllableGun> rangeSlider = CloneTurretControl_Slider("Range");
-			rangeSlider.DefaultValue = 0f;
-			rangeSlider.Normalizer = NormalizeRange;
-			rangeSlider.Denormalizer = DenormalizeRange;
+			IMyTerminalControlSlider rangeSlider = CloneTurretControl_Slider("Range");
+			//rangeSlider.DefaultValue = 0f;
+			//rangeSlider.Normalizer = NormalizeRange;
+			//rangeSlider.Denormalizer = DenormalizeRange;
 			rangeSlider.Writer = (x, result) => result.Append(PrettySI.makePretty(GetRange(x))).Append('m');
 			rangeSlider.Visible = RangeSliderVisible;
 			IMyTerminalValueControl<float> asInter = (IMyTerminalValueControl<float>)rangeSlider;
@@ -188,12 +206,17 @@ namespace Rynchodon.Weapons
 			CloneTurretControl_OnOff("TargetCharacters", TargetType.Character);
 			CloneTurretControl_OnOff("TargetStations", TargetType.Station);
 
-			foreach (IMyTerminalControl control in MyTerminalControlFactory.GetControls(typeof(MyLargeTurretBase)))
+            List<IMyTerminalControl> largeTurretControls = new List<IMyTerminalControl>();
+            MyAPIGateway.TerminalControls.GetControls<IMyLargeTurretBase>(out largeTurretControls);
+
+            foreach (IMyTerminalControl control in largeTurretControls)// MyTerminalControlFactory.GetControls(typeof(MyLargeTurretBase)))
 			{
-				MyTerminalControlOnOffSwitch<MyLargeTurretBase> onOff = control as MyTerminalControlOnOffSwitch<MyLargeTurretBase>;
-				if (onOff != null && onOff.Id == "TargetNeutrals")
+                IMyTerminalControlOnOffSwitch onOff = control as IMyTerminalControlOnOffSwitch;
+				if (control != null && control.Id == "TargetNeutrals")
 				{
-					MyTerminalControlOnOffSwitch<MyUserControllableGun> newControl = new MyTerminalControlOnOffSwitch<MyUserControllableGun>(onOff.Id, onOff.Title, onOff.Tooltip);
+                    IMyTerminalControlOnOffSwitch newControl = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyUserControllableGun>("TargetNeutrals");
+                    newControl.Title = onOff.Title;
+                    newControl.Tooltip = onOff.Tooltip;
 					IMyTerminalValueControl<bool> valueControlB = newControl;
 					valueControlB.Getter = block => !GetEnum(block, TargetingFlags.IgnoreOwnerless);
 					valueControlB.Setter = (block, value) => SetEnum(block, TargetingFlags.IgnoreOwnerless, !value);
@@ -203,15 +226,17 @@ namespace Rynchodon.Weapons
 			}
 
 			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
-			MyTerminalControls.Static.CustomControlGetter += CustomControlGetter;
+            MyAPIGateway.TerminalControls.CustomControlGetter += CustomControlGetter;
+            //MyTerminalControls.Static.CustomControlGetter += CustomControlGetter;
 		}
 
 		private static void Entities_OnCloseAll()
 		{
 			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
 			Static = null;
-			MyTerminalControls.Static.CustomControlGetter -= CustomControlGetter;
-		}
+            //MyTerminalControls.Static.CustomControlGetter -= CustomControlGetter;
+            MyAPIGateway.TerminalControls.CustomControlGetter -= CustomControlGetter;
+        }
 
 		private static void AddGetSet(IMyTerminalValueControl<bool> valueControl, TargetType flag)
 		{
@@ -233,12 +258,17 @@ namespace Rynchodon.Weapons
 
 		private static void CloneTurretControl_OnOff(string id, TargetType flag)
 		{
-			foreach (IMyTerminalControl control in MyTerminalControlFactory.GetControls(typeof(MyLargeTurretBase)))
+            List<IMyTerminalControl> largeTurretControls = new List<IMyTerminalControl>();
+            MyAPIGateway.TerminalControls.GetControls<IMyLargeTurretBase>(out largeTurretControls);
+
+            foreach (IMyTerminalControl control in largeTurretControls)
 			{
-				MyTerminalControlOnOffSwitch<MyLargeTurretBase> onOff = control as MyTerminalControlOnOffSwitch<MyLargeTurretBase>;
-				if (onOff != null && onOff.Id == id)
+				IMyTerminalControlOnOffSwitch onOff = control as IMyTerminalControlOnOffSwitch;
+				if (onOff != null && control.Id == id)
 				{
-					MyTerminalControlOnOffSwitch<MyUserControllableGun> newControl = new MyTerminalControlOnOffSwitch<MyUserControllableGun>(id, onOff.Title, onOff.Tooltip);
+                    IMyTerminalControlOnOffSwitch newControl = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyUserControllableGun>(id);
+                    newControl.Title = onOff.Title;
+                    newControl.Tooltip = onOff.Tooltip;
 					AddGetSet(newControl, flag);
 					Static.fixedControls.Add(newControl);
 					return;
@@ -247,27 +277,38 @@ namespace Rynchodon.Weapons
 			throw new ArgumentException("id: " + id + " does not have a control");
 		}
 
-		private static MyTerminalControlSlider<MyUserControllableGun> CloneTurretControl_Slider(string id)
+		private static IMyTerminalControlSlider CloneTurretControl_Slider(string id)
 		{
-			foreach (IMyTerminalControl control in MyTerminalControlFactory.GetControls(typeof(MyLargeTurretBase)))
+            IMyTerminalControlSlider response;
+
+            List<IMyTerminalControl> largeTurretControls = new List<IMyTerminalControl>();
+            MyAPIGateway.TerminalControls.GetControls<IMyLargeTurretBase>(out largeTurretControls);
+
+            foreach (IMyTerminalControl control in largeTurretControls)
 			{
-				MyTerminalControlSlider<MyLargeTurretBase> slider = control as MyTerminalControlSlider<MyLargeTurretBase>;
-				if (slider != null && slider.Id == id)
-					return new MyTerminalControlSlider<MyUserControllableGun>(id, slider.Title, slider.Tooltip);
+                IMyTerminalControlSlider slider = control as IMyTerminalControlSlider;
+				if (slider != null && control.Id == id)
+                {
+                    response = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyUserControllableGun>(id);
+                    response.Title = slider.Title;
+                    response.Tooltip = slider.Tooltip;
+                    return response;
+                }
+					
 			}
 			throw new ArgumentException("id: " + id + " does not have a control");
 		}
 
 		private static void CustomControlGetter(IMyTerminalBlock block, List<IMyTerminalControl> controlList)
 		{
-			if (!(block is MyUserControllableGun))
+			if (!(block is IMyUserControllableGun))
 				return;
 
 			int index = Static.indexShoot + 1;
 			int sharedIndex = 0;
 
 			controlList.Insert(index++, Static.sharedControls[sharedIndex++]);
-			if (block is MyLargeTurretBase)
+			if (block is IMyLargeTurretBase)
 				controlList.Insert(index++, Static.armsTargeting);
 			else
 				controlList.Insert(index++, Static.motorTurret);
@@ -275,7 +316,7 @@ namespace Rynchodon.Weapons
 			for (; sharedIndex < Static.sharedControls.Count; sharedIndex++)
 				controlList.Insert(index++, Static.sharedControls[sharedIndex]);
 
-			if (!(block is MyLargeTurretBase))
+			if (!(block is IMyLargeTurretBase))
 				foreach (var control in Static.fixedControls)
 					controlList.Insert(index++, control);
 		}
@@ -728,6 +769,7 @@ namespace Rynchodon.Weapons
 					Vector3 facing = Facing();
 					Vector3D end = start + facing * distance;
 					Vector3D contact = Vector3D.Zero;
+                    
 					if (MyHudCrosshair.GetTarget(start + facing * 10f, end, ref contact))
 						end = contact;
 					MySimpleObjectDraw.DrawLine(start, end, "WeaponLaser", ref colour, 0.05f);

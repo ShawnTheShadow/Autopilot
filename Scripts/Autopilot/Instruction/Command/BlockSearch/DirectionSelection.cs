@@ -24,7 +24,11 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			{
 				if (value_listBox == null)
 				{
-					value_listBox = new MyTerminalControlListbox<MyShipController>(m_id, MyStringId.GetOrCompute(m_title), m_tooltip == null ? MyStringId.NullOrEmpty : MyStringId.GetOrCompute(m_tooltip), false, 7);
+                    value_listBox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyShipController>(m_id);
+                    value_listBox.Title = MyStringId.GetOrCompute(m_title);
+                    value_listBox.Tooltip = m_tooltip == null ? MyStringId.NullOrEmpty : MyStringId.GetOrCompute(m_tooltip);
+                    value_listBox.Multiselect = false;
+                    value_listBox.VisibleRowsCount = 7;
 					value_listBox.ListContent = ListContent;
 					value_listBox.ItemSelected = ItemSelected;
 				}
