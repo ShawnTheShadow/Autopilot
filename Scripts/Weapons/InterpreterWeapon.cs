@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using Rynchodon.Attached;
 using Rynchodon.Instructions;
 using Rynchodon.Settings;
+using Rynchodon.Utility;
+using Sandbox.ModAPI;
 using VRage.Game.ModAPI;
 using Ingame = Sandbox.ModAPI.Ingame;
 
@@ -31,7 +33,7 @@ namespace Rynchodon.Weapons
 			this.Block = block;
 			this.Grid = block.CubeGrid;
 
-			myLogger = new Logger("InterpreterWeapon", () => Grid.DisplayName, () => Block.DefinitionDisplayNameText, () => Block.getNameOnly()) { MinimumLevel = Logger.severity.INFO };
+			myLogger = new Logger(() => Grid.DisplayName, () => Block.DefinitionDisplayNameText, () => Block.getNameOnly()) { MinimumLevel = Logger.severity.INFO };
 		}
 
 		/// <summary>
@@ -39,19 +41,7 @@ namespace Rynchodon.Weapons
 		/// </summary>
 		public void UpdateInstruction()
 		{
-			if (Block.OwnedNPC())
-			{
-				if (FallBackInstruct == null)
-				{
-					FallBackInstruct = ServerSettings.GetSettingString(ServerSettings.SettingName.sDefaultWeaponCommandsNPC);
-					if (string.IsNullOrWhiteSpace(FallBackInstruct))
-						FallBackInstruct = null;
-				}
-			}
-			else
-				FallBackInstruct = null;
-
-			base.UpdateInstructions();
+			base.UpdateInstructions(null);
 			if (!HasInstructions)
 				Options = new TargetingOptions();
 		}

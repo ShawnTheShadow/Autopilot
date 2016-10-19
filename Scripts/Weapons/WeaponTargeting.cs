@@ -53,7 +53,7 @@ namespace Rynchodon.Weapons
 
 		private class StaticVariables
 		{
-			public Logger logger = new Logger("WeaponTargeting");
+			public Logger logger = new Logger();
 			/// <remarks>
 			/// <para>Increasing the number of threads would require locks to be added in many areas.</para>
 			/// <para>One thread has no trouble putting enough projectiles into play to slow the game to a crawl.</para>
@@ -535,9 +535,9 @@ namespace Rynchodon.Weapons
 		{
 			WeaponTargeting targeting;
 			if (!TryGetWeaponTargeting(block, out targeting))
-				return; 
-			
-			Logger.DebugLog("CommandGolisGps", "selected.Count: " + selected.Count, Logger.severity.ERROR, condition: selected.Count > 1);
+				return;
+
+			Logger.DebugLog("selected.Count: " + selected.Count, Logger.severity.ERROR, condition: selected.Count > 1);
 
 			if (selected.Count == 0)
 				targeting.m_termControl_targetGolis_ev.Value = Vector3.Invalid;
@@ -660,7 +660,7 @@ namespace Rynchodon.Weapons
 				throw new ArgumentException("weapon(" + weapon.DefinitionDisplayNameText + ") is not of correct type");
 
 			this.myTurret = weapon as Ingame.IMyLargeTurretBase;
-			this.myLogger = new Logger("WeaponTargeting", weapon);
+			this.myLogger = new Logger(weapon);
 
 			this.Interpreter = new InterpreterWeapon(weapon);
 			this.IsNormalTurret = myTurret != null;
@@ -996,7 +996,7 @@ namespace Rynchodon.Weapons
 		/// Not going to add a ready-to-fire bypass for ignoring source grid it would only protect against suicidal designs
 		protected override bool Obstructed(Vector3D contactPosition, IMyEntity target)
 		{
-			myLogger.debugLog(CubeBlock == null, "CubeBlock == null", Logger.severity.FATAL);
+			myLogger.debugLog("CubeBlock == null", Logger.severity.FATAL, condition: CubeBlock == null);
 			m_ignoreList[0] = target;
 			return RayCast.Obstructed(new LineD(ProjectilePosition(), contactPosition), PotentialObstruction, m_ignoreList, true);
 		}

@@ -71,7 +71,7 @@ namespace Rynchodon.Autopilot.Navigator
 		public WeldBlock(Mover mover, AllNavigationSettings navSet, PseudoBlock welder, IMySlimBlock block)
 			: base(mover)
 		{
-			this.m_logger = new Logger(GetType().Name, () => mover.Block.CubeGrid.DisplayName, () => block.getBestName(), () => m_stage.ToString());
+			this.m_logger = new Logger(() => mover.Block.CubeGrid.DisplayName, () => block.getBestName(), () => m_stage.ToString());
 			this.m_offset = welder.Block.LocalAABB.GetLongestDim() * 0.5f; // this works for default welders, may not work if mod has an exotic design
 			this.m_welder = welder;
 			this.m_targetSlim = block;
@@ -197,7 +197,7 @@ namespace Rynchodon.Autopilot.Navigator
 				m_logger.debugLog("moved away from: " + m_targetSlim.getBestName(), Logger.severity.DEBUG);
 				if (!m_weldProjection && m_targetSlim.Damage() < m_slimTarget_initDmg)
 				{
-					m_logger.debugLog(m_targetSlim.Damage() != 0f, "assuming ship ran out of components, damage: " + m_targetSlim.Damage());
+					m_logger.debugLog("assuming ship ran out of components, damage: " + m_targetSlim.Damage(), condition: m_targetSlim.Damage() != 0f);
 					m_navSet.OnTaskComplete_NavEngage();
 					m_mover.StopMove();
 					m_mover.StopRotate();
@@ -235,7 +235,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 		private void MoveToTarget()
 		{
-			m_logger.debugLog(m_stage != Stage.Approach && m_stage != Stage.Weld, "moving to target in wrong stage", Logger.severity.FATAL);
+			m_logger.debugLog("moving to target in wrong stage", Logger.severity.FATAL, condition: m_stage != Stage.Approach && m_stage != Stage.Weld);
 
 			if ((Globals.UpdateCount - m_lastWeld) > 1200ul)
 			{
@@ -365,7 +365,7 @@ namespace Rynchodon.Autopilot.Navigator
 				foreach (Vector3I cell in removeList)
 					m_emptyNeighbours.Remove(cell);
 
-			m_logger.debugLog(m_closestEmptyNeighbour.HasValue, () => "closest cell: " + m_closestEmptyNeighbour + ", closest position: " + m_realGrid.GridIntegerToWorld(m_closestEmptyNeighbour.Value), Logger.severity.DEBUG);
+			m_logger.debugLog(() => "closest cell: " + m_closestEmptyNeighbour + ", closest position: " + m_realGrid.GridIntegerToWorld(m_closestEmptyNeighbour.Value), Logger.severity.DEBUG, condition: m_closestEmptyNeighbour.HasValue);
 		}
 
 	}

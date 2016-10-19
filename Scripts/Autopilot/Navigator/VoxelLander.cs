@@ -30,7 +30,7 @@ namespace Rynchodon.Autopilot.Navigator
 			: base(mover)
 		{
 			this.m_landBlock = landBlock ?? m_navSet.Settings_Current.LandingBlock;
-			this.m_logger = new Logger(GetType().Name, m_controlBlock.CubeBlock, () => m_landBlock.Block.getBestName());
+			this.m_logger = new Logger(m_controlBlock.CubeBlock, () => m_landBlock.Block.getBestName());
 			this.m_targetType = planet ? "Planet" : "Asteroid";
 
 			if (this.m_landBlock == null)
@@ -43,7 +43,7 @@ namespace Rynchodon.Autopilot.Navigator
 			if (asGear != null)
 			{
 				ITerminalProperty<bool> autolock = asGear.GetProperty("Autolock") as ITerminalProperty<bool>;
-				m_logger.debugLog(autolock == null, "autolock == null", Logger.severity.FATAL);
+				m_logger.debugLog("autolock == null", Logger.severity.FATAL, condition: autolock == null);
 				if (!autolock.GetValue(asGear))
 					autolock.SetValue(asGear, true);
 			}

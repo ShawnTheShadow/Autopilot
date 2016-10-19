@@ -70,7 +70,7 @@ namespace Rynchodon.Weapons.Guided
 			public readonly float Angle_AccelerateWhen = 0.02f;
 			public readonly float Cos_Angle_Detonate = (float)Math.Cos(0.3f);
 
-			public Logger staticLogger = new Logger("GuidedMissile");
+			public Logger staticLogger = new Logger();
 			public ThreadManager Thread = new ThreadManager();
 			public CachingList<GuidedMissile> AllGuidedMissiles = new CachingList<GuidedMissile>();
 			public FastResourceLock lock_AllGuidedMissiles = new FastResourceLock();
@@ -320,7 +320,7 @@ namespace Rynchodon.Weapons.Guided
 		public GuidedMissile(IMyEntity missile, GuidedMissileLauncher launcher, ref Target initialTarget)
 			: base(missile, launcher.CubeBlock)
 		{
-			myLogger = new Logger("GuidedMissile", () => myAmmo.AmmoDefinition.DisplayNameText, () => missile.getBestName(), () => m_stage.ToString());
+			myLogger = new Logger(() => myAmmo.AmmoDefinition.DisplayNameText, () => missile.getBestName(), () => m_stage.ToString());
 			m_launcher = launcher;
 			myAmmo = launcher.loadedAmmo;
 			m_owner = launcher.CubeBlock.OwnerId;
@@ -524,15 +524,15 @@ namespace Rynchodon.Weapons.Guided
 
 			//myLogger.debugLog("target: " + cached.Entity.getBestName() + ", ContactPoint: " + cached.ContactPoint);
 
-			myLogger.debugLog(!cached.FiringDirection.IsValid(), "FiringDirection invalid: " + cached.FiringDirection, Logger.severity.FATAL);
-			myLogger.debugLog(!cached.ContactPoint.IsValid(), "ContactPoint invalid: " + cached.ContactPoint, Logger.severity.FATAL);
+			myLogger.debugLog("FiringDirection invalid: " + cached.FiringDirection, Logger.severity.FATAL, condition: !cached.FiringDirection.IsValid());
+			myLogger.debugLog("ContactPoint invalid: " + cached.ContactPoint, Logger.severity.FATAL, condition: !cached.ContactPoint.IsValid());
 
 			Vector3 targetDirection;
 
 			switch (m_stage)
 			{
 				case Stage.Boost:
-					myLogger.debugLog(m_gravData == null, "m_gravData == null", Logger.severity.FATAL);
+					myLogger.debugLog("m_gravData == null", Logger.severity.FATAL, condition: m_gravData == null);
 					targetDirection = -m_gravData.Normal;
 					break;
 				case Stage.MidCourse:
@@ -682,7 +682,7 @@ namespace Rynchodon.Weapons.Guided
 				}
 				myCluster.masterVelocity = masterVelocity;
 
-				myLogger.debugLog(myCluster == null, "myCluster == null", Logger.severity.FATAL);
+				myLogger.debugLog("myCluster == null", Logger.severity.FATAL, condition: myCluster == null);
 				MatrixD worldMatrix = MyEntity.WorldMatrix;
 
 				for (int i = 0; i < myCluster.Slaves.Count; i++)
@@ -703,7 +703,7 @@ namespace Rynchodon.Weapons.Guided
 		/// </summary>
 		private void Explode()
 		{
-			myLogger.debugLog(!MyAPIGateway.Multiplayer.IsServer, "Not server!", Logger.severity.FATAL);
+			myLogger.debugLog("Not server!", Logger.severity.FATAL, condition: !MyAPIGateway.Multiplayer.IsServer);
 
 			if (MyEntity.Closed || m_stage == Stage.Exploded)
 				return;

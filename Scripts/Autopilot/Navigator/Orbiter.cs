@@ -53,7 +53,7 @@ namespace Rynchodon.Autopilot.Navigator
 					Vector3D navBlockPos = m_navBlock.WorldPosition;
 					double distSquared;
 					MyPlanet closest = MyPlanetExtensions.GetClosestPlanet(navBlockPos, out distSquared);
-					m_logger.debugLog(closest != null, () => "distance to closest: " + Math.Sqrt(distSquared) + ", MaximumRadius: " + closest.MaximumRadius);
+					m_logger.debugLog(() => "distance to closest: " + Math.Sqrt(distSquared) + ", MaximumRadius: " + closest.MaximumRadius, condition: closest != null);
 					if (closest != null && distSquared < closest.MaximumRadius * closest.MaximumRadius)
 					{
 						Vector3D targetCentre = value.GetCentre();
@@ -91,7 +91,7 @@ namespace Rynchodon.Autopilot.Navigator
         public Orbiter(Mover mover, string entity)
 			: base(mover)
 		{
-			this.m_logger = new Logger(GetType().Name, m_controlBlock.CubeBlock);
+			this.m_logger = new Logger(m_controlBlock.CubeBlock);
 			this.m_navBlock = m_navSet.Settings_Current.NavigationBlock;
 
 			switch (entity.LowerRemoveWhitespace())
@@ -128,7 +128,7 @@ namespace Rynchodon.Autopilot.Navigator
 		public Orbiter(Mover mover, AllNavigationSettings navSet, PseudoBlock faceBlock, IMyEntity entity, float distance, string name)
 			: base(mover)
 		{
-			this.m_logger = new Logger(GetType().Name, m_controlBlock.CubeBlock);
+			this.m_logger = new Logger(m_controlBlock.CubeBlock);
 			this.m_navBlock = faceBlock;
 			this.m_orbitEntity_name = name;
 

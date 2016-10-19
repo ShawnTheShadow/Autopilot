@@ -28,8 +28,8 @@ namespace Rynchodon
 		{ Debug = true; }
 
 		public FastResourceLock_debug(string LockName = "N/A")
-		{ 
-			this.myLogger = new Logger("FastResourceLock", null, () => LockName);
+		{
+			this.myLogger = new Logger(() => LockName);
 		}
 
 		#region Public Properties

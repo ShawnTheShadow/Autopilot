@@ -50,7 +50,7 @@ namespace Rynchodon.AntennaRelay
 			/// <summary>Maximum time since detection for entity to be kept in cache.</summary>
 			public readonly TimeSpan keepInCache = new TimeSpan(0, 1, 0);
 
-			public readonly Logger logger = new Logger("Projector");
+			public readonly Logger logger = new Logger();
 			public readonly List<IMyTerminalControl> TermControls = new List<IMyTerminalControl>();
 			public readonly List<IMyTerminalControl> TermControls_Colours = new List<IMyTerminalControl>();
 			public readonly List<IMyTerminalControl> TermControls_Offset = new List<IMyTerminalControl>();
@@ -505,14 +505,14 @@ namespace Rynchodon.AntennaRelay
 		/// </summary>
 		private static void ColourBlock(IMySlimBlock realBlock, IMyCubeGrid holoGrid)
 		{
-			Static.logger.debugLog(realBlock == null, "realBlock == null", Logger.severity.FATAL);
+			Static.logger.debugLog("realBlock == null", Logger.severity.FATAL, condition: realBlock == null);
 
 			float integrityRatio = (realBlock.BuildIntegrity - realBlock.CurrentDamage) / realBlock.MaxIntegrity;
 			float criticalRatio = ((MyCubeBlockDefinition)realBlock.BlockDefinition).CriticalIntegrityRatio;
 
 			float scaledRatio;
 			Color blockColour;
-			Static.logger.debugLog(integrityRatio != 1f, "integrityRatio: " + integrityRatio + ", criticalRatio: " + criticalRatio + ", fatblock: " + realBlock.FatBlock.getBestName() + ", functional: " + (realBlock.FatBlock != null && realBlock.FatBlock.IsFunctional));
+			Static.logger.debugLog("integrityRatio: " + integrityRatio + ", criticalRatio: " + criticalRatio + ", fatblock: " + realBlock.FatBlock.getBestName() + ", functional: " + (realBlock.FatBlock != null && realBlock.FatBlock.IsFunctional), condition: integrityRatio != 1f);
 			if (integrityRatio > criticalRatio && (realBlock.FatBlock == null || realBlock.FatBlock.IsFunctional))
 			{
 				scaledRatio = (integrityRatio - criticalRatio) / (1f - criticalRatio);
@@ -532,7 +532,7 @@ namespace Rynchodon.AntennaRelay
 		private static void UpdateBlockModel(IMySlimBlock realBlock, IMyCubeGrid holoGrid)
 		{
 			IMySlimBlock holoBlock = holoGrid.GetCubeBlock(realBlock.Position);
-			Static.logger.debugLog(holoBlock == null, "holoBlock == null", Logger.severity.FATAL);
+			Static.logger.debugLog("holoBlock == null", Logger.severity.FATAL, condition: holoBlock == null);
 
 			float realIntegrityRatio = (realBlock.BuildIntegrity - realBlock.CurrentDamage) / realBlock.MaxIntegrity;
 			float holoIntegrityRatio = (holoBlock.BuildIntegrity - holoBlock.CurrentDamage) / holoBlock.MaxIntegrity;
@@ -598,7 +598,7 @@ namespace Rynchodon.AntennaRelay
 
 		public Projector(IMyCubeBlock block)
 		{
-			this.m_logger = new Logger(GetType().Name, block);
+			this.m_logger = new Logger(block);
 			this.m_block = block;
 			this.m_netClient = new RelayClient(block);
 
@@ -846,7 +846,7 @@ namespace Rynchodon.AntennaRelay
 			if (!CanDisplay(seen))
 				return;
 
-			Profiler.StartProfileBlock(GetType().Name, "CreateHolo.GetObjectBuilder");
+			Profiler.StartProfileBlock("CreateHolo.GetObjectBuilder");
 			MyObjectBuilder_CubeGrid builder = (MyObjectBuilder_CubeGrid)seen.Entity.GetObjectBuilder();
 			Profiler.EndProfileBlock();
 
@@ -856,15 +856,15 @@ namespace Rynchodon.AntennaRelay
 			builder.CreatePhysics = false;
 			builder.EnableSmallToLargeConnections = false;
 
-			Profiler.StartProfileBlock(GetType().Name, "CreateHolo.CreateFromObjectBuilder");
+			Profiler.StartProfileBlock("CreateHolo.CreateFromObjectBuilder");
 			MyCubeGrid holo = (MyCubeGrid)MyEntities.CreateFromObjectBuilder(builder);
 			Profiler.EndProfileBlock();
 
-			Profiler.StartProfileBlock(GetType().Name, "CreateHolo.SetupProjection");
+			Profiler.StartProfileBlock("CreateHolo.SetupProjection");
 			SetupProjection(holo);
 			Profiler.EndProfileBlock();
 
-			Profiler.StartProfileBlock(GetType().Name, "CreateHolo.AddEntity");
+			Profiler.StartProfileBlock("CreateHolo.AddEntity");
 			MyAPIGateway.Entities.AddEntity(holo);
 			Profiler.EndProfileBlock();
 

@@ -19,7 +19,7 @@ namespace Rynchodon.Autopilot.Pathfinder
 
 		//public bool Interrupt = false;
 
-		private readonly Logger m_logger = new Logger(null, "PathChecker");
+		private readonly Logger m_logger = new Logger();
 		private readonly IMyCubeGrid m_grid;
 
 		private MyEntity m_ignoreEntity;
@@ -34,7 +34,7 @@ namespace Rynchodon.Autopilot.Pathfinder
 
 		public PathChecker(IMyCubeGrid grid)
 		{
-			this.m_logger = new Logger("PathChecker", () => m_grid.DisplayName);
+			this.m_logger = new Logger(() => m_grid.DisplayName);
 			this.m_grid = grid;
 			this.m_profiler = new GridShapeProfiler();
 		}
@@ -51,7 +51,7 @@ namespace Rynchodon.Autopilot.Pathfinder
 		/// <returns>True if path is clear. False if slow test needs to be run.</returns>
 		public bool TestFast(PseudoBlock NavigationBlock, Vector3D worldDestination, bool ignoreAsteroid, MyEntity ignoreEntity, bool landing)
 		{
-			m_logger.debugLog(NavigationBlock.Grid != m_grid, "NavigationBlock.CubeGrid != m_grid", Logger.severity.FATAL);
+			m_logger.debugLog("NavigationBlock.CubeGrid != m_grid", Logger.severity.FATAL, condition: NavigationBlock.Grid != m_grid);
 
 			//CheckInterrupt();
 
@@ -100,7 +100,7 @@ namespace Rynchodon.Autopilot.Pathfinder
 
 		public bool TestSlow(out MyEntity blockingPath, out Vector3? pointOfObstruction)
 		{
-			m_logger.debugLog(m_offendingEntities == null, "m_offendingEntities == null, did you remember to call TestFast()?", Logger.severity.FATAL);
+			m_logger.debugLog("m_offendingEntities == null, did you remember to call TestFast()?", Logger.severity.FATAL, condition: m_offendingEntities == null);
 
 			IMyCubeBlock ignoreBlock = m_ignoreEntity as IMyCubeBlock;
 

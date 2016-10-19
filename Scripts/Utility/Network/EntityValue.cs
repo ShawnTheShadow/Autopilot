@@ -25,7 +25,7 @@ namespace Rynchodon.Utility.Network
 		protected class StaticVariables
 		{
 			public Dictionary<long, Dictionary<byte, EntityValue>> allEntityValues = new Dictionary<long, Dictionary<byte, EntityValue>>();
-			public Logger logger = new Logger("EntityValue");
+			public Logger logger = new Logger();
 			public MyConcurrentPool<StringBuilder> updateSB = new MyConcurrentPool<StringBuilder>();
 			public int bytesSent, messagesSent;
 		}
@@ -332,7 +332,7 @@ namespace Rynchodon.Utility.Network
 
 		private void RequestEntityValueFromServer()
 		{
-			Static.logger.debugLog(MyAPIGateway.Multiplayer.IsServer, "This is the server!", Logger.severity.ERROR);
+			Static.logger.debugLog("This is the server!", Logger.severity.ERROR, condition: MyAPIGateway.Multiplayer.IsServer);
 			List<byte> bytes = ResourcePool<List<byte>>.Get();
 			try
 			{

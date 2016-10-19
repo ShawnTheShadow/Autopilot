@@ -36,7 +36,7 @@ namespace Rynchodon.Autopilot.Navigator
 		public WeldGrid(Mover mover, string gridName, bool shopAfter)
 			: base(mover)
 		{
-			this.m_logger = new Logger(GetType().Name, mover.Block.CubeBlock);
+			this.m_logger = new Logger(mover.Block.CubeBlock);
 			this.m_finder = new GridFinder(mover.NavSet, m_controlBlock, gridName);
 			this.m_shopAfter = shopAfter;
 
@@ -308,7 +308,7 @@ namespace Rynchodon.Autopilot.Navigator
 				foreach (IMySlimBlock remove in removeList)
 					m_damagedBlocks.Remove(remove);
 
-			m_logger.debugLog(repairable != null, () => "closest repairable block: " + repairable.getBestName(), Logger.severity.DEBUG);
+			m_logger.debugLog(() => "closest repairable block: " + repairable.getBestName(), Logger.severity.DEBUG, condition: repairable != null);
 
 			return repairable;
 		}

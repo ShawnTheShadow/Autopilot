@@ -7,7 +7,7 @@ namespace Rynchodon.Attached
 	/// Not derived from AttachableBlockPair because testing for attached is fast but getting attached block is slow.
 	public static class StatorRotor
 	{
-		private static readonly Logger myLogger = new Logger("StatorRotor");
+		private static readonly Logger myLogger = new Logger();
 
 		/// <summary>
 		/// Tries to get a rotor attached to a stator.
@@ -69,7 +69,7 @@ namespace Rynchodon.Attached
 			public Stator(IMyCubeBlock block)
 				: base(block, AttachedGrid.AttachmentKind.Motor)
 			{
-				this.myLogger = new Logger("Stator", block);
+				this.myLogger = new Logger(block);
 				this.myStator = block as IMyMotorStator;
 				Registrar.Add(this.myStator, this);
 			}
@@ -82,7 +82,9 @@ namespace Rynchodon.Attached
 					if (myStator.IsAttached)
 					{
 						MyObjectBuilder_MotorStator statorBuilder = (myStator as IMyCubeBlock).GetObjectBuilder_Safe() as MyObjectBuilder_MotorStator;
-						if (Registrar.TryGetValue(statorBuilder.RotorEntityId.Value, out partner))
+						if (!statorBuilder.TopBlockId.HasValue)
+							myLogger.alwaysLog("Failed to set partner, TopBlockId does not have value", Logger.severity.WARNING);
+						else if (Registrar.TryGetValue(statorBuilder.TopBlockId.Value, out partner))
 						{
 							myLogger.debugLog("Set partner to " + partner.myRotor.DisplayNameText, Logger.severity.INFO);
 							Attach(partner.myRotor);

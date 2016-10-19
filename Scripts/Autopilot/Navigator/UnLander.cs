@@ -28,7 +28,7 @@ namespace Rynchodon.Autopilot.Navigator
 		public UnLander(Mover mover, PseudoBlock unlandBlock = null)
 			: base(mover)
 		{
-			this.m_logger = new Logger(GetType().Name, m_controlBlock.CubeBlock);
+			this.m_logger = new Logger(m_controlBlock.CubeBlock);
 			this.m_unlandBlock = unlandBlock ?? m_navSet.Settings_Current.LandingBlock ?? m_navSet.LastLandingBlock;
 
 			if (this.m_unlandBlock == null)
@@ -36,7 +36,7 @@ namespace Rynchodon.Autopilot.Navigator
 				m_logger.debugLog("No unland block", Logger.severity.INFO);
 				return;
 			}
-			m_logger.debugLog(this.m_unlandBlock.Block == null, "Unland block is missing Block property", Logger.severity.FATAL);
+			m_logger.debugLog("Unland block is missing Block property", Logger.severity.FATAL, condition: this.m_unlandBlock.Block == null);
 
 			IMyLandingGear asGear = m_unlandBlock.Block as IMyLandingGear;
 			if (asGear != null)

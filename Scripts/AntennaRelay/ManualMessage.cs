@@ -18,7 +18,7 @@ namespace Rynchodon.AntennaRelay
 
 		public class StaticVariables
 		{
-			public Logger logger = new Logger("ManualMessage");
+			public Logger logger = new Logger();
 
             /* var SendMessageButton = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("ManualMessageId");
              SendMessageButton.Title = MyStringId.GetOrCompute("Send Message");
@@ -227,7 +227,7 @@ namespace Rynchodon.AntennaRelay
 
 		public ManualMessage(IMyCubeBlock block)
 		{
-			m_logger = new Logger(GetType().Name, block);
+			m_logger = new Logger(block);
 			m_block = block;
 
 			Registrar.Add(block, this);

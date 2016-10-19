@@ -37,7 +37,7 @@ namespace Rynchodon.AntennaRelay
 		private class StaticVariables
 		{
 			public readonly TimeSpan MaximumLifetime = new TimeSpan(1, 0, 0);
-			public readonly Logger logger = new Logger("Message");
+			public readonly Logger logger = new Logger();
 			public readonly List<byte> bytes = new List<byte>();
 		}
 
@@ -92,7 +92,7 @@ namespace Rynchodon.AntennaRelay
 
 		private static void FromClient(byte[] bytes, int pos)
 		{
-			Static.logger.debugLog(!MyAPIGateway.Multiplayer.IsServer, "Not the server!", Logger.severity.ERROR);
+			Static.logger.debugLog("Not the server!", Logger.severity.ERROR, condition: !MyAPIGateway.Multiplayer.IsServer);
 
 			long sender = ByteConverter.GetLong(bytes, ref pos);
 			string recipientGrid = ByteConverter.GetString(bytes, ref pos);
@@ -232,13 +232,13 @@ namespace Rynchodon.AntennaRelay
 			IMyEntity entity;
 			if (!MyAPIGateway.Entities.TryGetEntityById(builder.DestCubeBlock, out entity) || !(entity is IMyCubeBlock))
 			{
-				(new Logger(GetType().Name)).alwaysLog("Entity does not exist in world: " + builder.DestCubeBlock, Logger.severity.WARNING);
+				(new Logger()).alwaysLog("Entity does not exist in world: " + builder.DestCubeBlock, Logger.severity.WARNING);
 				return;
 			}
 			this.DestCubeBlock = (IMyCubeBlock)entity;
 			if (!MyAPIGateway.Entities.TryGetEntityById(builder.SourceCubeBlock, out entity) || !(entity is IMyCubeBlock))
 			{
-				(new Logger(GetType().Name)).alwaysLog("Entity does not exist in world: " + builder.SourceCubeBlock, Logger.severity.WARNING);
+				(new Logger()).alwaysLog("Entity does not exist in world: " + builder.SourceCubeBlock, Logger.severity.WARNING);
 				return;
 			}
 			this.SourceCubeBlock = (IMyCubeBlock)entity;
