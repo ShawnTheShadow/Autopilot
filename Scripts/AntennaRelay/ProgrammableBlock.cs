@@ -1,20 +1,23 @@
-﻿using System;
+using System;
 using System.Text;
 using System.Xml.Serialization;
 using Rynchodon.Instructions;
 using Rynchodon.Utility.Network;
+using Rynchodon.Utility;
+using Sandbox.Game.Entities.Blocks;
+using Sandbox.Game.Entities.Cube;
+using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
-using Sandbox.ModAPI.Interfaces;
-using Sandbox.ModAPI.Interfaces.Terminal;
 using VRage.Collections;
 using VRage.Game.ModAPI;
 using VRage.Utils;
 using VRageMath;
+using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Rynchodon.AntennaRelay
 {
 
-    public class ProgrammableBlock : BlockInstructions
+	public class ProgrammableBlock : BlockInstructions
 	{
 
 		[Serializable]
@@ -32,72 +35,59 @@ namespace Rynchodon.AntennaRelay
 
 		private class StaticVariables
 		{
-			public Logger s_logger = new Logger();
 			public MyTerminalControlOnOffSwitch<MyProgrammableBlock> handleDetected;
 			public MyTerminalControlTextbox<MyProgrammableBlock> blockCountList;
+
+			public StaticVariables()
+			{
+				Logger.DebugLog("entered", Logger.severity.TRACE);
+				TerminalControlHelper.EnsureTerminalControlCreated<MyProgrammableBlock>();
+
+				MyTerminalAction<MyProgrammableBlock> programmable_sendMessage = new MyTerminalAction<MyProgrammableBlock>("SendMessage", new StringBuilder("Send Message"), "Textures\\GUI\\Icons\\Actions\\Start.dds")
+				{
+					ValidForGroups = false,
+					ActionWithParameters = ProgrammableBlock_SendMessage
+				};
+				programmable_sendMessage.ParameterDefinitions.Add(Ingame.TerminalActionParameter.Get(string.Empty));
+				programmable_sendMessage.ParameterDefinitions.Add(Ingame.TerminalActionParameter.Get(string.Empty));
+				programmable_sendMessage.ParameterDefinitions.Add(Ingame.TerminalActionParameter.Get(string.Empty));
+				MyTerminalControlFactory.AddAction(programmable_sendMessage);
+
+				MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MyProgrammableBlock>());
+
+				handleDetected = new MyTerminalControlOnOffSwitch<MyProgrammableBlock>("HandleDetected", MyStringId.GetOrCompute("Handle Detected"));
+				new ValueSync<bool, ProgrammableBlock>(handleDetected, (prog) => prog.value_handleDetectedTerminal, (prog, value) => prog.value_handleDetectedTerminal = value);
+				MyTerminalControlFactory.AddControl(handleDetected);
+
+				blockCountList = new MyTerminalControlTextbox<MyProgrammableBlock>("BlockCounts", MyStringId.GetOrCompute("Blocks to Count"), MyStringId.GetOrCompute("Comma separated list of blocks to count"));
+				new StringBuilderSync<ProgrammableBlock>(blockCountList, (prog) => prog.value_blockCountList, (prog, value) => {
+					prog.value_blockCountList = value;
+					prog.m_blockCountList_btl = new BlockTypeList(prog.m_blockCountList_sb.ToString().LowerRemoveWhitespace().Split(','));
+				});
+				MyTerminalControlFactory.AddControl(blockCountList);
+			}
 		}
 
-		private static StaticVariables Static = new StaticVariables();
+		private static StaticVariables Static;
 
-		static ProgrammableBlock()
+		[OnWorldLoad]
+		private static void Load()
 		{
-            //MyTerminalAction<MyProgrammableBlock> programmable_sendMessage = new MyTerminalAction<MyProgrammableBlock>("SendMessage", new StringBuilder("Send Message"), "Textures\\GUI\\Icons\\Actions\\Start.dds")
-            IMyTerminalAction programmable_sendMessage = MyAPIGateway.TerminalControls.CreateAction<IMyProgrammableBlock>("SendMessage");
-            programmable_sendMessage.Name = new StringBuilder("Send Message");
-            programmable_sendMessage.Icon = "Textures\\GUI\\Icons\\Actions\\Start.dds";
-            programmable_sendMessage.ValidForGroups = false;
-            //Action<IMyTerminalBlock> ProgrammableBlock_SendMessage = programmable_sendMessage.Action;
-            //programmable_sendMessage.Action = ProgrammableBlock_SendMessage;
-
-            /*{
-				ValidForGroups = false,
-				ActionWithParameters = ProgrammableBlock_SendMessage
-			};*/
-            /*programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
-			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));
-			programmable_sendMessage.ParameterDefinitions.Add(Sandbox.ModAPI.Ingame.TerminalActionParameter.Get(string.Empty));*/
-            MyAPIGateway.TerminalControls.AddAction<IMyProgrammableBlock>(programmable_sendMessage);
-			//MyTerminalControlFactory.AddAction(programmable_sendMessage);
-
-			//MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MyProgrammableBlock>());
-            string separator = null;
-            MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyProgrammableBlock>(separator);
-
-			//Static.handleDetected = new MyTerminalControlOnOffSwitch<MyProgrammableBlock>("HandleDetected", MyStringId.GetOrCompute("Handle Detected"));
-			IMyTerminalValueControl<bool> valueControl = Static.handleDetected as IMyTerminalValueControl<bool>;
-			valueControl.Getter = GetHandleDetectedTerminal;
-			valueControl.Setter = SetHandleDetectedTerminal;
-			//MyTerminalControlFactory.AddControl(Static.handleDetected);
-            Static.handleDetected = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlOnOffSwitch, IMyProgrammableBlock>("HandleDetected");
-            Static.handleDetected.Title = MyStringId.GetOrCompute("Handle Detected");
-            MyAPIGateway.TerminalControls.AddControl<IMyProgrammableBlock>(Static.handleDetected);
-
-
-			//Static.blockCountList = new MyTerminalControlTextbox<MyProgrammableBlock>("BlockCounts", MyStringId.GetOrCompute("Blocks to Count"), MyStringId.GetOrCompute("Comma separate list of blocks to count"));
-			//Static.blockCountList.Visible = block => ((ITerminalProperty<bool>)((Sandbox.ModAPI.Ingame.IMyTerminalBlock)block).GetProperty("HandleDetected")).GetValue(block);
-			IMyTerminalControlTextbox asInterface = Static.blockCountList as IMyTerminalControlTextbox;
-			asInterface.Getter = GetBlockCountList;
-			asInterface.Setter = SetBlockCountList;
-			//MyTerminalControlFactory.AddControl(Static.blockCountList);
-            Static.blockCountList = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyProgrammableBlock>("BlockCounts");
-            Static.blockCountList.Visible = block => ((ITerminalProperty<bool>)block.GetProperty("HandleDetected")).GetValue(block);
-            MyAPIGateway.TerminalControls.AddControl<IMyProgrammableBlock>(Static.blockCountList);
-
-            MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
+			Static = new StaticVariables();
 		}
 
-		private static void Entities_OnCloseAll()
+		[OnWorldClose]
+		private static void Unload()
 		{
-			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
 			Static = null;
 		}
 
 		/// <param name="args">Recipient grid, recipient block, message</param>
-		private static void ProgrammableBlock_SendMessage(IMyFunctionalBlock block, ListReader<Sandbox.ModAPI.Ingame.TerminalActionParameter> args)
+		private static void ProgrammableBlock_SendMessage(MyFunctionalBlock block, ListReader<Ingame.TerminalActionParameter> args)
 		{
 			if (args.Count != 3)
 			{
-				Static.s_logger.debugLog("Wrong number of arguments, expected 3, got " + args.Count, Logger.severity.WARNING);
+				Logger.DebugLog("Wrong number of arguments, expected 3, got " + args.Count, Logger.severity.WARNING);
 				if (MyAPIGateway.Session.Player != null)
 					block.AppendCustomInfo("Failed to send message:\nWrong number of arguments, expected 3, got " + args.Count + '\n');
 				return;
@@ -106,9 +96,9 @@ namespace Rynchodon.AntennaRelay
 			string[] stringArgs = new string[3];
 			for (int i = 0; i < 3; i++)
 			{
-				if (args[i].GetType() != typeof(string))
+				if (args[i].TypeCode != TypeCode.String)
 				{
-					Static.s_logger.debugLog("TerminalActionParameter #" + i + " is of wrong type, expected String, got " + args[i].TypeCode, Logger.severity.WARNING);
+					Logger.DebugLog("TerminalActionParameter #" + i + " is of wrong type, expected String, got " + args[i].TypeCode, Logger.severity.WARNING);
 					if (MyAPIGateway.Session.Player != null)
 						block.AppendCustomInfo("Failed to send message:\nTerminalActionParameter #" + i + " is of wrong type, expected String, got " + args[i].TypeCode + '\n');
 					return;
@@ -118,115 +108,41 @@ namespace Rynchodon.AntennaRelay
 			}
 
 			int count = Message.CreateAndSendMessage(block.EntityId, stringArgs[0], stringArgs[1], stringArgs[2]);
-           // if (MyAPIGateway.Session.Player != null)
-           //     (block as IMyTerminalBlock).AppendingCustomInfo += MessageBlock_AppendingCustomInfo;
-
-        }
-
-        /*private static void MessageBlock_AppendingCustomInfo(IMyTerminalBlock block, StringBuilder sb)
-        {
-            //sb.Clear();
-            //sb.Append("Sent message to " + count + " block" + (count == 1 ? "" : "s"));
-
-        }*/
-
-
-        private static bool GetHandleDetectedTerminal(IMyTerminalBlock block)
-		{
-			ProgrammableBlock pb;
-			if (!Registrar.TryGetValue(block, out pb))
-			{
-				if (Static.s_logger == null)
-					return false;
-				throw new ArgumentException("block id not found in registrar");
-			}
-
-			return pb.m_handleDetectedTerminal;
-		}
-
-		private static void SetHandleDetectedTerminal(IMyTerminalBlock block, bool value)
-		{
-			ProgrammableBlock pb;
-			if (!Registrar.TryGetValue(block, out pb))
-			{
-				if (Static.s_logger == null)
-					return;
-				throw new ArgumentException("block id not found in registrar");
-			}
-
-			pb.m_handleDetectedTerminal = value;
-			block.SwitchTerminalTo();
-		}
-
-		private static StringBuilder GetBlockCountList(IMyTerminalBlock block)
-		{
-			ProgrammableBlock pb;
-			if (!Registrar.TryGetValue(block, out pb))
-			{
-				if (Static.s_logger == null)
-					return new StringBuilder();
-				throw new ArgumentException("block id not found in registrar");
-			}
-
-			return pb.m_blockCountList_sb;
-		}
-
-		private static void SetBlockCountList(IMyTerminalBlock block, StringBuilder value)
-		{
-			ProgrammableBlock pb;
-			if (!Registrar.TryGetValue(block, out pb))
-			{
-				if (Static.s_logger == null)
-					return;
-				throw new ArgumentException("block id not found in registrar");
-			}
-
-			pb.m_blockCountList_sb = value;
-		}
-
-		private static void UpdateVisual()
-		{
-			Static.handleDetected.UpdateVisual();
-			Static.blockCountList.UpdateVisual();
+			if (MyAPIGateway.Session.Player != null)
+				(block as IMyTerminalBlock).AppendCustomInfo("Sent message to " + count + " block" + (count == 1 ? "" : "s"));
 		}
 
 		private readonly IMyProgrammableBlock m_progBlock;
 		private readonly RelayClient m_networkClient;
-		private readonly Logger m_logger;
 
-		private readonly EntityValue<bool> m_handleDetectedTerminal_ev;
-		private readonly EntityStringBuilder m_blockCountList_ev;
-	
 		private bool m_handleDetected;
 
+		private bool value_handleDetectedTerminal;
 		private bool m_handleDetectedTerminal
 		{
-			get { return m_handleDetectedTerminal_ev.Value; }
-			set { m_handleDetectedTerminal_ev.Value = value; }
+			get { return value_handleDetectedTerminal; }
+			set { Static.handleDetected.SetValue((MyProgrammableBlock)m_progBlock, value); }
 		}
 
+		private StringBuilder value_blockCountList = new StringBuilder();
 		private StringBuilder m_blockCountList_sb
 		{
-			get { return m_blockCountList_ev.Value; }
-			set { m_blockCountList_ev.Value = value; }
+			get { return value_blockCountList; }
+			set { Static.blockCountList.SetValue((MyProgrammableBlock)m_progBlock, value); }
 		}
 
 		private BlockTypeList m_blockCountList_btl;
 
+		private Logable Log
+		{ get { return new Logable(m_progBlock); } }
+
 		public ProgrammableBlock(IMyCubeBlock block)
 			: base(block)
 		{
-			m_logger = new Logger(block);
-			m_progBlock = block as Ingame.IMyProgrammableBlock;
+			m_progBlock = block as IMyProgrammableBlock;
 			m_networkClient = new RelayClient(block, HandleMessage);
 
-			byte index = 0;
-			m_handleDetectedTerminal_ev = new EntityValue<bool>(block, index++, UpdateVisual);
-			m_blockCountList_ev = new EntityStringBuilder(block, index++, () => {
-				UpdateVisual();
-				m_blockCountList_btl = new BlockTypeList(m_blockCountList_sb.ToString().LowerRemoveWhitespace().Split(','));
-			});
-
+			Log.DebugLog("initialized");
 			Registrar.Add(block, this);
 		}
 
@@ -237,20 +153,6 @@ namespace Rynchodon.AntennaRelay
 
 			this.m_handleDetectedTerminal = builder.HandleDetected;
 			this.m_blockCountList_sb = new StringBuilder(builder.BlockCountList);
-		}
-
-		public Builder_ProgrammableBlock GetBuilder()
-		{
-			// do not save if default
-			if (!this.m_handleDetectedTerminal && this.m_blockCountList_sb.Length == 0)
-				return null;
-
-			return new Builder_ProgrammableBlock()
-			{
-				BlockId = this.m_block.EntityId,
-				HandleDetected = this.m_handleDetectedTerminal,
-				BlockCountList = this.m_blockCountList_sb.ToString()
-			};
 		}
 
 		public void Update100()
@@ -337,13 +239,13 @@ namespace Rynchodon.AntennaRelay
 
 			if (parameter.Length == 0)
 			{
-				m_logger.debugLog("no detected entities");
+				Log.DebugLog("no detected entities");
 				return;
 			}
 
-			//m_logger.debugLog("parameters:\n" + parameter.ToString().Replace(string.Empty + entitySeparator, entitySeparator + "\n"));
+			//Log.DebugLog("parameters:\n" + parameter.ToString().Replace(string.Empty + entitySeparator, entitySeparator + "\n"));
 			if (!m_progBlock.TryRun(parameter.ToString()))
-				m_logger.alwaysLog("Failed to run program", Logger.severity.WARNING);
+				Log.AlwaysLog("Failed to run program", Logger.severity.INFO);
 		}
 
 		private void HandleMessage(Message received)
@@ -352,13 +254,13 @@ namespace Rynchodon.AntennaRelay
 
 			if (m_progBlock.TryRun(param))
 			{
-				m_logger.debugLog("Sent message to program", Logger.severity.DEBUG);
+				Log.DebugLog("Sent message to program", Logger.severity.DEBUG);
 				if (MyAPIGateway.Session.Player != null)
 					(m_block as IMyTerminalBlock).AppendCustomInfo("Received message");
 			}
 			else
 			{
-				m_logger.debugLog("Failed to send message to program", Logger.severity.WARNING);
+				Log.DebugLog("Failed to send message to program", Logger.severity.WARNING);
 				if (MyAPIGateway.Session.Player != null)
 					(m_block as IMyTerminalBlock).AppendCustomInfo("Received message but failed to run program.");
 			}

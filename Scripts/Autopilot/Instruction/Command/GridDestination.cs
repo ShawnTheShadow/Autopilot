@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using System.Text;
 using Rynchodon.Autopilot.Navigator;
+using Sandbox.Game.Entities;
+using Sandbox.Game.Gui;
 using VRage.Utils;
-using Sandbox.ModAPI.Interfaces.Terminal;
-using Sandbox.ModAPI;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
-    public class GridDestination : ACommand
+	public class GridDestination : ACommand
 	{
 
 		private StringBuilder m_gridName;
@@ -40,15 +40,13 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-            IMyTerminalControlTextbox gridName = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("GridName");
-            gridName.Title = MyStringId.GetOrCompute("Grid Name");
-            gridName.Tooltip = MyStringId.NullOrEmpty;
+			MyTerminalControlTextbox<MyShipController> gridName = new MyTerminalControlTextbox<MyShipController>("GridName", MyStringId.GetOrCompute("Grid Name"), MyStringId.NullOrEmpty);
 			gridName.Getter = block => m_gridName;
 			gridName.Setter = (block, value) => m_gridName = value;
 			controls.Add(gridName);
 		}
 
-		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			if (string.IsNullOrWhiteSpace(command))
 			{

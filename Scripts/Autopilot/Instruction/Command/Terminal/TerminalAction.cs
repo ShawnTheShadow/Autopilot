@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Rynchodon.Attached;
+using Rynchodon.Autopilot.Pathfinding;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
@@ -19,26 +20,21 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		#region Static
 
-		static TerminalAction()
-		{
-			Logger.SetFileName("TerminalAction");
-		}
-
-		private static void RunActionOnBlock(Movement.Mover mover, string blockName, string actionString, List<Ingame.TerminalActionParameter> termParams)
+		private static void RunActionOnBlock(Pathfinder pathfinder, string blockName, string actionString, List<Ingame.TerminalActionParameter> termParams)
 		{
 			blockName = blockName.Trim();
 			actionString = actionString.Trim(); // leave spaces in actionString
 
-			AttachedGrid.RunOnAttachedBlock(mover.Block.CubeGrid, AttachedGrid.AttachmentKind.Permanent, block => {
-				IMyCubeBlock fatblock = block.FatBlock;
-				if (fatblock == null || !(fatblock is IMyTerminalBlock))
-					return false;
+			foreach (IMyCubeBlock fatblock in AttachedGrid.AttachedCubeBlocks(pathfinder.Mover.Block.CubeGrid, AttachedGrid.AttachmentKind.Permanent, true))
+			{
+				if (!(fatblock is IMyTerminalBlock))
+					continue;
 
-				if (!mover.Block.Controller.canControlBlock(fatblock))
-					return false;
+				if (!pathfinder.Mover.Block.Controller.canControlBlock(fatblock))
+					continue;
 
 				if (!fatblock.DisplayNameText.Contains(blockName, StringComparison.InvariantCultureIgnoreCase))
-					return false;
+					continue;
 
 				IMyTerminalBlock terminalBlock = fatblock as IMyTerminalBlock;
 				Sandbox.ModAPI.Interfaces.ITerminalAction actionToRun = terminalBlock.GetActionWithName(actionString); // get actionToRun on every iteration so invalid blocks can be ignored
@@ -49,9 +45,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 					else
 						actionToRun.Apply(fatblock);
 				}
-
-				return false;
-			}, true);
+			}
 		}
 
 		private static bool CheckParams(VRage.Game.ModAPI.IMyCubeBlock autopilot, string blockName, string actionName, string[] parameters, out string message, out List<Ingame.TerminalActionParameter> termParams)
@@ -180,36 +174,30 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-            IMyTerminalControlTextbox textBox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("BlockName");
-            textBox.Title = MyStringId.GetOrCompute("Block name");
-            textBox.Tooltip = MyStringId.GetOrCompute("Blocks with names containing this string will run the action.");
+			MyTerminalControlTextbox<MyShipController> textBox = new MyTerminalControlTextbox<MyShipController>("BlockName", MyStringId.GetOrCompute("Block name"),
+				MyStringId.GetOrCompute("Blocks with names containing this string will run the action."));
 			textBox.Getter = block => m_targetBlock;
 			textBox.Setter = (block, value) => m_targetBlock = value;
 			controls.Add(textBox);
 
-            IMyTerminalControlListbox actionList = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyShipController>("ActionList");
-            actionList.Title = MyStringId.GetOrCompute("Action");
-            actionList.Tooltip = MyStringId.NullOrEmpty;
+			IMyTerminalControlListbox actionList = new MyTerminalControlListbox<MyShipController>("ActionList", MyStringId.GetOrCompute("Action"), MyStringId.NullOrEmpty);
 			actionList.ListContent = ListContent;
 			actionList.ItemSelected = ItemSelected;
 
-            IMyTerminalControlButton searchButton = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("SearchButton");
-            searchButton.Title = MyStringId.GetOrCompute("Search");
-            searchButton.Tooltip = MyStringId.GetOrCompute("Search for actions");
-            searchButton.Action = block => actionList.UpdateVisual();
+			MyTerminalControlButton<MyShipController> searchButton = new MyTerminalControlButton<MyShipController>("SearchButton", MyStringId.GetOrCompute("Search"),
+				MyStringId.GetOrCompute("Search for actions"), block => actionList.UpdateVisual());
 
 			controls.Add(searchButton);
 			controls.Add(actionList);
 
-            IMyTerminalControlTextbox actionParams = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("ActionParams");
-            actionParams.Title = MyStringId.GetOrCompute("Action Params");
-            actionParams.Tooltip = MyStringId.GetOrCompute("Comma separated list of parameters to pass to action");
+			MyTerminalControlTextbox<MyShipController> actionParams = new MyTerminalControlTextbox<MyShipController>("ActionParams", MyStringId.GetOrCompute("Action Params"),
+				MyStringId.GetOrCompute("Comma separated list of parameters to pass to action"));
 			actionParams.Getter = block => m_actionParams;
 			actionParams.Setter = (block, value) => m_actionParams = value;
 			controls.Add(actionParams);
 		}
 
-		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			string[] split = command.Split(new char[] { ',' }, 3);
 

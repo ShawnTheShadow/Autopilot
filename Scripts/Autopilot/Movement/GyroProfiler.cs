@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Rynchodon.Attached;
 using Rynchodon.Threading;
 using Rynchodon.Utility.Vectors;
+using Rynchodon.Utility;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
@@ -23,7 +24,6 @@ namespace Rynchodon.Autopilot.Movement
 		private static readonly ThreadManager Thread = new ThreadManager(2, true, "GyroProfiler");
 		private static ITerminalProperty<bool> TP_GyroOverrideToggle;
 
-		private readonly Logger m_logger;
 		private readonly IMyCubeGrid myGrid;
 
 		private PositionGrid m_centreOfMass;
@@ -37,6 +37,8 @@ namespace Rynchodon.Autopilot.Movement
 		private FastResourceLock m_lock = new FastResourceLock();
 
 		public float GyroForce { get; private set; }
+
+		private Logable Log { get { return new Logable(myGrid); } }
 
 		/// <summary>The three moments of inertial for the coordinate axes</summary>
 		public Vector3 InertiaMoment
@@ -60,7 +62,6 @@ namespace Rynchodon.Autopilot.Movement
 
 		public GyroProfiler(IMyCubeGrid grid)
 		{
-			this.m_logger = new Logger(() => grid.DisplayName);
 			this.myGrid = grid;
 
 			ClearOverrides();
@@ -68,14 +69,11 @@ namespace Rynchodon.Autopilot.Movement
 
 		private void CalcGyroForce()
 		{
-			ReadOnlyList<IMyCubeBlock> gyros = CubeGridCache.GetFor(myGrid).GetBlocksOfType(typeof(MyObjectBuilder_Gyro));
-			if (gyros == null)
-			{
-				GyroForce = 0f;
-			}
-
 			float force = 0f;
-			foreach (MyGyro g in gyros)
+			CubeGridCache cache = CubeGridCache.GetFor(myGrid);
+			if (cache == null)
+				return;
+			foreach (MyGyro g in cache.BlocksOfType(typeof(MyObjectBuilder_Gyro)))
 				if (g.IsWorking)
 					force += g.MaxGyroForce; // MaxGyroForce accounts for power ratio and modules
 
@@ -88,13 +86,13 @@ namespace Rynchodon.Autopilot.Movement
 
 			PositionGrid centre = ((PositionWorld)myGrid.Physics.CenterOfMassWorld).ToGrid(myGrid);
 
-			if (Vector3.DistanceSquared(centre, m_centreOfMass) > 1f || Math.Abs(myGrid.Physics.Mass - m_mass) > 10f)
+			if (Vector3.DistanceSquared(centre, m_centreOfMass) > 1f || Math.Abs(myGrid.Physics.Mass - m_mass) > 1000f)
 			{
 				using (m_lock.AcquireExclusiveUsing())
 				{
 					if (m_updating)
 					{
-						m_logger.debugLog("already updating", Logger.severity.DEBUG);
+						Log.DebugLog("already updating", Logger.severity.DEBUG);
 						return;
 					}
 					m_updating = true;
@@ -107,22 +105,15 @@ namespace Rynchodon.Autopilot.Movement
 			}
 		}
 
+		#region Inertia Moment
+
 		private void CalculateInertiaMoment()
 		{
-			m_logger.debugLog("recalculating inertia moment", Logger.severity.INFO);
-			MyGameTimer timer = new MyGameTimer();
+			Log.DebugLog("recalculating inertia moment", Logger.severity.INFO);
 
-			List<IMySlimBlock> blocks = ResourcePool<List<IMySlimBlock>>.Get();
 			m_calcInertiaMoment = Vector3.Zero;
-			AttachedGrid.RunOnAttachedBlock(myGrid, AttachedGrid.AttachmentKind.Physics, block => {
-				blocks.Add(block);
-				return false;
-			}, true);
-
-			foreach (var block in blocks)
-				AddToInertiaMoment(block);
-			blocks.Clear();
-			ResourcePool<List<IMySlimBlock>>.Return(blocks);
+			foreach (IMySlimBlock slim in (AttachedGrid.AttachedSlimBlocks(myGrid, AttachedGrid.AttachmentKind.Physics, true)))
+				AddToInertiaMoment(slim);
 
 			using (m_lock.AcquireExclusiveUsing())
 			{
@@ -130,9 +121,8 @@ namespace Rynchodon.Autopilot.Movement
 				m_invertedInertiaMoment = 1f / m_inertiaMoment;
 			}
 
-			m_logger.debugLog("Calculated in " + timer.Elapsed.ToPrettySeconds());
-			m_logger.debugLog("Inertia moment: " + m_inertiaMoment, Logger.severity.DEBUG);
-			m_logger.debugLog("Inverted inertia moment: " + m_invertedInertiaMoment, Logger.severity.DEBUG);
+			Log.DebugLog("Inertia moment: " + m_inertiaMoment, Logger.severity.DEBUG);
+			Log.DebugLog("Inverted inertia moment: " + m_invertedInertiaMoment, Logger.severity.DEBUG);
 
 			m_updating = false;
 		}
@@ -157,7 +147,7 @@ namespace Rynchodon.Autopilot.Movement
 			Vector3 size = (Max - Min) / stepSize + 1f;
 			float mass = block.Mass / size.Volume;
 
-			//m_logger.debugLog("block: " + block.getBestName() + ", block mass: " + block.Mass + ", min: " + Min + ", max: " + Max + ", step: " + stepSize + ", size: " + size + ", volume: " + size.Volume + ", sub mass: " + mass, "AddToInertiaMoment()");
+			//Log.DebugLog("block: " + block.getBestName() + ", block mass: " + block.Mass + ", min: " + Min + ", max: " + Max + ", step: " + stepSize + ", size: " + size + ", volume: " + size.Volume + ", sub mass: " + mass, "AddToInertiaMoment()");
 
 			Vector3 current = Vector3.Zero;
 			for (current.X = Min.X; current.X <= Max.X + stepSize * 0.5f; current.X += stepSize)
@@ -172,6 +162,10 @@ namespace Rynchodon.Autopilot.Movement
 			Vector3 moment = mass * relativePosition.LengthSquared() * Vector3.One - relativePosition * relativePosition;
 			m_calcInertiaMoment += moment;
 		}
+
+		#endregion Inertia Moment
+
+		#region Override
 
 		///// <summary>
 		///// Sets the overrides of gyros to match RotateVelocity. Should be called on game thread.
@@ -195,11 +189,7 @@ namespace Rynchodon.Autopilot.Movement
 		/// </summary>
 		public void ClearOverrides()
 		{
-			ReadOnlyList<IMyCubeBlock> gyros = CubeGridCache.GetFor(myGrid).GetBlocksOfType(typeof(MyObjectBuilder_Gyro));
-			if (gyros == null)
-				return;
-
-			foreach (MyGyro gyro in gyros)
+			foreach (MyGyro gyro in CubeGridCache.GetFor(myGrid).BlocksOfType(typeof(MyObjectBuilder_Gyro)))
 				if (gyro.GyroOverride)
 				{
 					SetOverride(gyro, false);
@@ -213,6 +203,8 @@ namespace Rynchodon.Autopilot.Movement
 				TP_GyroOverrideToggle = gyro.GetProperty("Override") as ITerminalProperty<bool>;
 			TP_GyroOverrideToggle.SetValue(gyro, enable);
 		}
+
+		#endregion Override
 
 	}
 }

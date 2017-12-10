@@ -2,10 +2,12 @@ using System.Collections.Generic; // from mscorlib.dll, System.dll, System.Core.
 using System.Text; // from mscorlib.dll
 using Rynchodon.AntennaRelay;
 using Rynchodon.Autopilot.Data;
-using Rynchodon.Autopilot.Movement;
+using Rynchodon.Autopilot.Pathfinding;
+using Rynchodon.Utility;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
 using Sandbox.Game.Entities; // from Sandbox.Game.dll
+using Sandbox.Game.Entities.Cube;
 using Sandbox.ModAPI; // from Sandbox.Common.dll
 using VRage.Collections;
 using VRage.Game; // from VRage.Math.dll
@@ -18,8 +20,6 @@ namespace Rynchodon.Autopilot.Navigator
 {
 	public class WeldGrid : NavigatorMover, INavigatorRotator
 	{
-
-		private readonly Logger m_logger;
 		private readonly bool m_shopAfter;
 		private readonly GridFinder m_finder;
 		private readonly MultiBlock<MyObjectBuilder_ShipWelder> m_navWeld;
@@ -33,11 +33,13 @@ namespace Rynchodon.Autopilot.Navigator
 		private readonly Dictionary<string, int> m_components_inventory = new Dictionary<string, int>();
 		private List<IMySlimBlock> m_blocksWithInventory;
 
-		public WeldGrid(Mover mover, string gridName, bool shopAfter)
-			: base(mover)
+		private Logable Log
+		{ get { return new Logable(m_controlBlock?.CubeBlock); } }
+
+		public WeldGrid(Pathfinder pathfinder, string gridName, bool shopAfter)
+			: base(pathfinder)
 		{
-			this.m_logger = new Logger(mover.Block.CubeBlock);
-			this.m_finder = new GridFinder(mover.NavSet, m_controlBlock, gridName);
+			this.m_finder = new GridFinder(pathfinder.NavSet, m_controlBlock, gridName);
 			this.m_shopAfter = shopAfter;
 
 			PseudoBlock navBlock = m_navSet.Settings_Current.NavigationBlock;
@@ -48,12 +50,12 @@ namespace Rynchodon.Autopilot.Navigator
 				CubeGridCache cache = CubeGridCache.GetFor(m_controlBlock.CubeGrid);
 				if (cache == null)
 				{
-					m_logger.debugLog("failed to get cache", Logger.severity.WARNING);
+					Log.DebugLog("failed to get cache", Logger.severity.WARNING);
 					return;
 				}
 				if (cache.CountByType(typeof(MyObjectBuilder_ShipWelder)) < 1)
 				{
-					m_logger.debugLog("no welders on ship", Logger.severity.WARNING);
+					Log.DebugLog("no welders on ship", Logger.severity.WARNING);
 					return;
 				}
 				m_navWeld = new MultiBlock<MyObjectBuilder_ShipWelder>(() => m_mover.Block.CubeGrid);
@@ -76,7 +78,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 				if (Globals.UpdateCount >= m_timeoutAt)
 				{
-					m_logger.debugLog("Search timed out", Logger.severity.INFO);
+					Log.DebugLog("Search timed out", Logger.severity.INFO);
 					m_navSet.OnTaskComplete_NavMove();
 				}
 
@@ -85,7 +87,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 			if (m_currentGrid == null || m_finder.Grid.Entity != m_currentGrid.Entity)
 			{
-				m_logger.debugLog("grid changed from " + m_finder.Grid.Entity.getBestName() + " to " + m_finder.Grid.Entity.getBestName(), Logger.severity.INFO);
+				Log.DebugLog("grid changed from " + m_finder.Grid.Entity.getBestName() + " to " + m_finder.Grid.Entity.getBestName(), Logger.severity.INFO);
 				m_currentGrid = m_finder.Grid;
 				GetDamagedBlocks();
 			}
@@ -93,7 +95,7 @@ namespace Rynchodon.Autopilot.Navigator
 			IMySlimBlock repairable = FindClosestRepairable();
 			if (repairable == null)
 			{
-				m_logger.debugLog("failed to find a repairable block", Logger.severity.DEBUG);
+				Log.DebugLog("failed to find a repairable block", Logger.severity.DEBUG);
 				GetDamagedBlocks();
 				if (m_shopAfter)
 					CreateShopper();
@@ -104,7 +106,7 @@ namespace Rynchodon.Autopilot.Navigator
 			}
 
 			m_damagedBlocks.Remove(repairable);
-			new WeldBlock(m_mover, m_navSet, m_navWeld, repairable);
+			new WeldBlock(m_pathfinder, m_navSet, m_navWeld, repairable);
 		}
 
 		public void Rotate()
@@ -137,18 +139,17 @@ namespace Rynchodon.Autopilot.Navigator
 
 			// get physical blocks
 
-			Attached.AttachedGrid.RunOnAttachedBlock(m_currentGrid.Entity as IMyCubeGrid, Attached.AttachedGrid.AttachmentKind.Permanent, slim => {
+			foreach (IMySlimBlock slim in Attached.AttachedGrid.AttachedSlimBlocks((IMyCubeGrid)m_currentGrid.Entity, Attached.AttachedGrid.AttachmentKind.Permanent, true))
 				if (slim.CurrentDamage > 0f || slim.BuildLevelRatio < 1f)
 					m_damagedBlocks.Add(slim);
-				return false;
-			}, true);
 
 			// get projections
 
 			HashSet<IMyEntity> projections = null;
-			Attached.AttachedGrid.RunOnAttached(m_currentGrid.Entity as IMyCubeGrid, Attached.AttachedGrid.AttachmentKind.Permanent, grid => {
+			foreach (IMyCubeGrid grid in Attached.AttachedGrid.AttachedGrids((IMyCubeGrid)m_currentGrid.Entity, Attached.AttachedGrid.AttachmentKind.Permanent, true))
+			{
 				if (CubeGridCache.GetFor(grid).CountByType(typeof(MyObjectBuilder_Projector)) == 0)
-					return false;
+					continue;
 
 				using (MainLock.AcquireSharedUsing())
 				{
@@ -158,7 +159,7 @@ namespace Rynchodon.Autopilot.Navigator
 						MyAPIGateway.Entities.GetEntities(projections, entity => entity is MyCubeGrid && ((MyCubeGrid)entity).Projector != null);
 
 						if (projections.Count == 0)
-							return true;
+							break;
 					}
 
 					foreach (MyCubeGrid proj in projections)
@@ -167,11 +168,12 @@ namespace Rynchodon.Autopilot.Navigator
 								m_projectedBlocks.Add(block);
 				}
 
-				return false;
-			}, true);
+				continue;
+			}
+
 			m_projectedBlocks.ApplyAdditions();
 
-			m_logger.debugLog("damaged blocks: " + m_damagedBlocks.Count + ", projected blocks: " + m_projectedBlocks.Count);
+			Log.DebugLog("damaged blocks: " + m_damagedBlocks.Count + ", projected blocks: " + m_projectedBlocks.Count);
 		}
 
 		/// <summary>
@@ -186,7 +188,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 				if (projected.Closed || projected.Projector.Closed || !projected.Projector.IsWorking || projectorGrid.Closed)
 				{
-					m_logger.debugLog("projection closed");
+					Log.DebugLog("projection closed");
 					continue;
 				}
 
@@ -194,7 +196,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 				if (projectorGrid.GetCubeBlock(min) != null)
 				{
-					m_logger.debugLog("space is occupied: " + min);
+					Log.DebugLog("space is occupied: " + min);
 					m_projectedBlocks.Remove(block);
 					continue;
 				}
@@ -212,7 +214,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 					if (projectorGrid.CanPlaceBlock(min, max, orient, ((MyCubeBlock)cubeBlock).BlockDefinition))
 					{
-						m_logger.debugLog("can place fatblock: " + cubeBlock.DisplayNameText + ", position: " + min + ", world: " + projectorGrid.GridIntegerToWorld(min));
+						Log.DebugLog("can place fatblock: " + cubeBlock.DisplayNameText + ", position: " + min + ", world: " + projectorGrid.GridIntegerToWorld(min));
 						m_damagedBlocks.Add(block);
 						m_projectedBlocks.Remove(block);
 					}
@@ -223,7 +225,7 @@ namespace Rynchodon.Autopilot.Navigator
 				// no fatblock, cannot get definition
 				if (projectorGrid.IsTouchingAnyNeighbor(min, min))
 				{
-					m_logger.debugLog("can place slimblock: " + block.ToString() + ", position: " + min + ", world: " + projectorGrid.GridIntegerToWorld(min));
+					Log.DebugLog("can place slimblock: " + block.ToString() + ", position: " + min + ", world: " + projectorGrid.GridIntegerToWorld(min));
 					m_damagedBlocks.Add(block);
 					m_projectedBlocks.Remove(block);
 				}
@@ -238,7 +240,7 @@ namespace Rynchodon.Autopilot.Navigator
 		/// <returns>The closest repairable block to the welders.</returns>
 		private IMySlimBlock FindClosestRepairable()
 		{
-			m_logger.debugLog("searching for closest repairable block");
+			Log.DebugLog("searching for closest repairable block");
 
 			if (m_damagedBlocks.Count == 0)
 			{
@@ -261,13 +263,13 @@ namespace Rynchodon.Autopilot.Navigator
 			{
 				if (slim.Closed())
 				{
-					m_logger.debugLog("slim closed: " + slim.getBestName());
+					Log.DebugLog("slim closed: " + slim.getBestName());
 					continue;
 				}
 
 				if (slim.Damage() == 0f && ((MyCubeGrid)slim.CubeGrid).Projector == null)
 				{
-					m_logger.debugLog("already repaired: " + slim.getBestName(), Logger.severity.DEBUG);
+					Log.DebugLog("already repaired: " + slim.getBestName(), Logger.severity.DEBUG);
 					if (removeList == null)
 						removeList = new List<IMySlimBlock>();
 					removeList.Add(slim);
@@ -308,7 +310,7 @@ namespace Rynchodon.Autopilot.Navigator
 				foreach (IMySlimBlock remove in removeList)
 					m_damagedBlocks.Remove(remove);
 
-			m_logger.debugLog(() => "closest repairable block: " + repairable.getBestName(), Logger.severity.DEBUG, condition: repairable != null);
+			Log.DebugLog(() => "closest repairable block: " + repairable.getBestName(), Logger.severity.DEBUG, condition: repairable != null);
 
 			return repairable;
 		}
@@ -322,7 +324,7 @@ namespace Rynchodon.Autopilot.Navigator
 			{
 				m_blocksWithInventory = new List<IMySlimBlock>();
 				m_controlBlock.CubeGrid.GetBlocks_Safe(m_blocksWithInventory, slim => slim.FatBlock != null && (slim.FatBlock as MyEntity).HasInventory);
-				m_logger.debugLog("blocks with inventory: " + m_blocksWithInventory.Count);
+				Log.DebugLog("blocks with inventory: " + m_blocksWithInventory.Count);
 			}
 
 			m_components_inventory.Clear();
@@ -333,7 +335,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 				MyEntity asEntity = slim.FatBlock as MyEntity;
 				int inventories = asEntity.InventoryCount;
-				m_logger.debugLog("searching " + inventories + " inventories of " + slim.FatBlock.DisplayNameText);
+				Log.DebugLog("searching " + inventories + " inventories of " + slim.FatBlock.DisplayNameText);
 				for (int i = 0; i < inventories; i++)
 				{
 					List<MyPhysicalInventoryItem> allItems = null;
@@ -343,11 +345,11 @@ namespace Rynchodon.Autopilot.Navigator
 					{
 						if (item.Content.TypeId != typeof(MyObjectBuilder_Component))
 						{
-							m_logger.debugLog("skipping " + item.Content + ", not a component");
+							Log.DebugLog("skipping " + item.Content + ", not a component");
 							continue;
 						}
 
-						m_logger.debugLog("item: " + item.Content.SubtypeName + ", amount: " + item.Amount);
+						Log.DebugLog("item: " + item.Content.SubtypeName + ", amount: " + item.Amount);
 						int amount = (int)item.Amount;
 						if (amount < 1)
 							continue;
@@ -377,7 +379,7 @@ namespace Rynchodon.Autopilot.Navigator
 			{
 				if (slim.Closed())
 				{
-					m_logger.debugLog("slim closed: " + slim.getBestName());
+					Log.DebugLog("slim closed: " + slim.getBestName());
 					continue;
 				}
 
@@ -389,11 +391,11 @@ namespace Rynchodon.Autopilot.Navigator
 
 			if (m_components_missing.Count != 0)
 			{
-				m_logger.debugLog("Created shopper");
+				Log.DebugLog("Created shopper");
 				m_navSet.Shopper = new Shopper(m_navSet, m_controlBlock.CubeGrid, m_components_missing);
 			}
 			else
-				m_logger.debugLog("nothing to shop for");
+				Log.DebugLog("nothing to shop for");
 		}
 
 		private void GetMissingComponents(IMySlimBlock slim)
@@ -406,22 +408,14 @@ namespace Rynchodon.Autopilot.Navigator
 		{
 			using (MainLock.AcquireSharedUsing())
 			{
-				MyCubeBlockDefinition definition;
-
-				IMyCubeBlock fat = slim.FatBlock;
-				if (fat != null)
-					definition = fat.GetCubeBlockDefinition();
-				else
-					definition = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.GetObjectBuilder());
-
-				foreach (var component in definition.Components)
+				foreach (MyCubeBlockDefinition.Component component in ((MySlimBlock)slim).BlockDefinition.Components)
 				{
 					int currentCount;
 					if (!m_components_missing.TryGetValue(component.Definition.Id.SubtypeName, out currentCount))
 						currentCount = 0;
 					currentCount += component.Count;
 					m_components_missing[component.Definition.Id.SubtypeName] = currentCount;
-					//m_logger.debugLog("missing " + component.Definition.Id.SubtypeName + ": " + component.Count + ", total: " + currentCount, "GetAllComponents()");
+					//Log.DebugLog("missing " + component.Definition.Id.SubtypeName + ": " + component.Count + ", total: " + currentCount, "GetAllComponents()");
 				}
 			}
 		}

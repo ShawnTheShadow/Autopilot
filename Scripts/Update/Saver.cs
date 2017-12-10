@@ -9,7 +9,7 @@ using Rynchodon.Utility.Network;
 using Rynchodon.Weapons;
 using Rynchodon.Weapons.SystemDisruption;
 using Sandbox.ModAPI;
-using VRage.Game.Components;
+using VRage.Collections;
 
 namespace Rynchodon.Update
 {
@@ -17,98 +17,168 @@ namespace Rynchodon.Update
 	/// Saves/loads persistent data to/from a save file.
 	/// </summary>
 	/// TODO: client saving
-	[MySessionComponentDescriptor(MyUpdateOrder.NoUpdate)]
-	public class Saver : MySessionComponentBase
+	public class Saver
 	{
 
 		[Serializable]
 		public class Builder_ArmsData
 		{
 			[XmlAttribute]
-			[Obsolete("Needed for backwards compatibility")]
-			public int ModVersion;
-			[XmlAttribute]
 			public long SaveTime;
 			public Version ArmsVersion;
 			public RelayStorage.Builder_NetworkStorage[] AntennaStorage;
 			public Disruption.Builder_Disruption[] SystemDisruption;
 			public ShipAutopilot.Builder_Autopilot[] Autopilot;
+			public ASync.SyncBuilder Sync;
+
+#pragma warning disable CS0649
+			[XmlAttribute]
+			public int ModVersion;
 			public ProgrammableBlock.Builder_ProgrammableBlock[] ProgrammableBlock;
 			public TextPanel.Builder_TextPanel[] TextPanel;
 			public WeaponTargeting.Builder_WeaponTargeting[] Weapon;
-			public EntityValue.Builder_EntityValues[] EntityValues;
+			public UpgradeEntityValue.Builder_EntityValues[] EntityValues;
+#pragma warning restore CS0649
 		}
 
 		private const string SaveIdString = "ARMS save file id", SaveXml = "ARMS save XML data";
 
-		public static Saver Instance;
+		private static Saver Instance { get; set; }
 
-		private readonly Logger m_logger;
+		[AfterArmsInit]
+		private static void OnLoad()
+		{
+			Instance = new Saver();
+		}
+
+		[OnWorldClose]
+		private static void Unload()
+		{
+			Instance = null;
+		}
+
+		/// <summary>LastSeen that were not added immediately upon world loading, Saver will keep trying to add them.</summary>
+		private CachingDictionary<long, CachingList<LastSeen.Builder_LastSeen>> m_failedLastSeen;
 		private FileMaster m_fileMaster;
 
-		private Builder_ArmsData m_data;
-
-		public Saver()
+		private Saver()
 		{
-			this.m_logger = new Logger();
-			Instance = this;
+			DoLoad(GetData());
 		}
 
-		public void Initialize()
-		{
-			GetData();
-		}
-
-		private void GetData()
+		private Builder_ArmsData GetData()
 		{
 			m_fileMaster = new FileMaster("SaveDataMaster.txt", "SaveData - ", int.MaxValue);
+
+			Builder_ArmsData data = null;
 
 			string serialized;
 			if (MyAPIGateway.Utilities.GetVariable(SaveXml, out serialized))
 			{
-				m_data = MyAPIGateway.Utilities.SerializeFromXML<Builder_ArmsData>(serialized);
-				if (m_data != null)
+				data = MyAPIGateway.Utilities.SerializeFromXML<Builder_ArmsData>(serialized);
+				if (data != null)
 				{
-					m_logger.debugLog("ARMS data was imbeded in the save file proper", Logger.severity.DEBUG);
-					return;
+					Logger.DebugLog("ARMS data was imbeded in the save file proper", Rynchodon.Logger.severity.DEBUG);
+					return data;
 				}
 			}
 
-			string identifier = LegacyIdentifier();
+			string identifier = LegacyIdentifier(true);
 			if (identifier == null)
 			{
-				m_logger.debugLog("no identifier");
-				return;
+				Logger.DebugLog("no identifier");
+				return data;
 			}
 
 			var reader = m_fileMaster.GetTextReader(identifier);
 			if (reader != null)
 			{
-				m_logger.debugLog("loading from file: " + identifier);
-				m_data = MyAPIGateway.Utilities.SerializeFromXML<Builder_ArmsData>(reader.ReadToEnd());
+				Logger.DebugLog("loading from file: " + identifier);
+				data = MyAPIGateway.Utilities.SerializeFromXML<Builder_ArmsData>(reader.ReadToEnd());
 				reader.Close();
 			}
 			else
-				m_logger.alwaysLog("Failed to open file reader for " + identifier);
+				Logger.AlwaysLog("Failed to open file reader for " + identifier);
+
+			return data;
 		}
 
 		/// <summary>
 		/// Load data from a file. Shall be called after mod is fully initialized.
 		/// </summary>
-		public void DoLoad()
+		private void DoLoad(Builder_ArmsData data)
 		{
 			try
 			{
-				LoadSaveData();
+				LoadSaveData(data);
 			}
 			catch (Exception ex)
 			{
-				m_logger.alwaysLog("Exception: " + ex, Logger.severity.ERROR);
-				Logger.Notify("ARMS: failed to load data", 60000, Logger.severity.ERROR);
+				Logger.AlwaysLog("Exception: " + ex, Rynchodon.Logger.severity.ERROR);
+				Rynchodon.Logger.Notify("ARMS: failed to load data", 60000, Rynchodon.Logger.severity.ERROR);
 			}
 		}
 
-		private string LegacyIdentifier()
+		private void RetryLastSeen()
+		{
+			foreach (KeyValuePair<long, CachingList<LastSeen.Builder_LastSeen>> storageLastSeen in m_failedLastSeen)
+			{
+				RelayNode node;
+				if (Registrar.TryGetValue(storageLastSeen.Key, out node))
+				{
+					RelayStorage store = node.Storage;
+					foreach (LastSeen.Builder_LastSeen builder in storageLastSeen.Value)
+					{
+						if (MyAPIGateway.Entities.EntityExists(builder.EntityId))
+						{
+							LastSeen ls = new LastSeen(builder);
+							if (ls.IsValid)
+							{
+								Logger.DebugLog("Successfully created a LastSeen. Primary node: " + storageLastSeen.Key + ", entity: " + ls.Entity.nameWithId());
+								storageLastSeen.Value.Remove(builder);
+							}
+							else
+								Logger.AlwaysLog("Unknown failure with last seen", Rynchodon.Logger.severity.ERROR);
+						}
+						else
+							Logger.DebugLog("Not yet available: " + builder.EntityId);
+					}
+					storageLastSeen.Value.ApplyRemovals();
+					if (storageLastSeen.Value.Count == 0)
+					{
+						Logger.DebugLog("Finished with: " + storageLastSeen.Key, Rynchodon.Logger.severity.DEBUG);
+						m_failedLastSeen.Remove(storageLastSeen.Key);
+					}
+					else
+						Logger.DebugLog("For " + storageLastSeen.Key + ", " + storageLastSeen.Value.Count + " builders remain");
+				}
+				else
+					Logger.DebugLog("Failed to get node for " + storageLastSeen.Key, Rynchodon.Logger.severity.WARNING);
+			}
+			m_failedLastSeen.ApplyRemovals();
+
+			if (m_failedLastSeen.Count() == 0)
+			{
+				Logger.DebugLog("All LastSeen have been successfully added", Rynchodon.Logger.severity.INFO);
+				m_failedLastSeen = null;
+				UpdateManager.Unregister(100, RetryLastSeen);
+			}
+			else
+			{
+				Logger.DebugLog(m_failedLastSeen.Count() + " primary nodes still have last seen to be added");
+
+				if (Globals.UpdateCount >= 3600)
+				{
+					foreach (KeyValuePair<long, CachingList<LastSeen.Builder_LastSeen>> storageLastSeen in m_failedLastSeen)
+						foreach (LastSeen.Builder_LastSeen builder in storageLastSeen.Value)
+							Logger.AlwaysLog("Failed to add last seen to world. Primary node: " + storageLastSeen.Key + ", entity ID: " + builder.EntityId, Rynchodon.Logger.severity.WARNING);
+					m_failedLastSeen = null;
+					UpdateManager.Unregister(100, RetryLastSeen);
+				}
+			}
+		}
+
+		private string LegacyIdentifier(bool loading)
 		{
 			string path = MyAPIGateway.Session.CurrentPath;
 			string saveId_fromPath = path.Substring(path.LastIndexOfAny(new char[] { '/', '\\' }) + 1) + ".xml";
@@ -123,17 +193,17 @@ namespace Rynchodon.Update
 			{
 				if (!MyAPIGateway.Utilities.GetVariable(SaveIdString, out saveId_fromWorld))
 				{
-					m_logger.alwaysLog("Save exists for path but save id could not be retrieved from world. From path: " + saveId_fromPath, Logger.severity.ERROR);
+					Logger.AlwaysLog("Save exists for path but save id could not be retrieved from world. From path: " + saveId_fromPath, Rynchodon.Logger.severity.ERROR);
 				}
 				else if (saveId_fromPath != saveId_fromWorld)
 				{
-					m_logger.alwaysLog("Save id from path does not match save id from world. From path: " + saveId_fromPath + ", from world: " + saveId_fromWorld, Logger.severity.ERROR);
+					Logger.AlwaysLog("Save id from path does not match save id from world. From path: " + saveId_fromPath + ", from world: " + saveId_fromWorld, Rynchodon.Logger.severity.ERROR);
 
 					// prefer from world
 					if (m_fileMaster.FileExists(saveId_fromWorld))
 						saveId = saveId_fromWorld;
 					else
-						m_logger.alwaysLog("Save id from world does not match a save. From world: " + saveId_fromWorld, Logger.severity.ERROR);
+						Logger.AlwaysLog("Save id from world does not match a save. From world: " + saveId_fromWorld, Rynchodon.Logger.severity.ERROR);
 				}
 			}
 			else
@@ -142,18 +212,21 @@ namespace Rynchodon.Update
 				{
 					if (m_fileMaster.FileExists(saveId_fromWorld))
 					{
-						m_logger.alwaysLog("Save is a copy, loading from old world: " + saveId_fromWorld, Logger.severity.DEBUG);
+						if (loading)
+							Logger.AlwaysLog("Save is a copy, loading from old world: " + saveId_fromWorld, Rynchodon.Logger.severity.DEBUG);
 						saveId = saveId_fromWorld;
 					}
 					else
 					{
-						m_logger.alwaysLog("Cannot load world, save id does not match any save: " + saveId_fromWorld, Logger.severity.DEBUG);
+						if (loading)
+							Logger.AlwaysLog("Cannot load world, save id does not match any save: " + saveId_fromWorld, Rynchodon.Logger.severity.DEBUG);
 						return null;
 					}
 				}
 				else
 				{
-					m_logger.alwaysLog("Cannot load world, no save id found", Logger.severity.DEBUG);
+					if (loading)
+						Logger.AlwaysLog("Cannot load world, no save id found", Rynchodon.Logger.severity.DEBUG);
 					return null;
 				}
 			}
@@ -161,31 +234,34 @@ namespace Rynchodon.Update
 			return saveId;
 		}
 
-		private void LoadSaveData()
+		private void LoadSaveData(Builder_ArmsData data)
 		{
-			if (m_data == null)
+			if (data == null)
 			{
-				m_logger.debugLog("No data to load");
+				Logger.DebugLog("No data to load");
 				return;
 			}
 
 #pragma warning disable 612, 618
-			if (Comparer<Version>.Default.Compare(m_data.ArmsVersion, default(Version)) == 0)
-				m_data.ArmsVersion = new Version(m_data.ModVersion);
+			if (Comparer<Version>.Default.Compare(data.ArmsVersion, default(Version)) == 0)
+			{
+				Logger.DebugLog("Old version: " + data.ModVersion);
+				data.ArmsVersion = new Version(data.ModVersion);
+			}
 #pragma warning restore 612, 618
 
-			m_logger.alwaysLog("Save version: " + m_data.ArmsVersion, Logger.severity.INFO);
+			Logger.AlwaysLog("Save version: " + data.ArmsVersion, Rynchodon.Logger.severity.INFO);
 
-			// network
+			// relay
 
 			Dictionary<Message.Builder_Message, Message> messages = MyAPIGateway.Multiplayer.IsServer ? new Dictionary<Message.Builder_Message, Message>() : null;
-			SerializableGameTime.Adjust = new TimeSpan(m_data.SaveTime);
-			foreach (RelayStorage.Builder_NetworkStorage bns in m_data.AntennaStorage)
+			SerializableGameTime.Adjust = new TimeSpan(data.SaveTime);
+			foreach (RelayStorage.Builder_NetworkStorage bns in data.AntennaStorage)
 			{
 				RelayNode node;
 				if (!Registrar.TryGetValue(bns.PrimaryNode, out node))
 				{
-					m_logger.alwaysLog("Failed to get node for: " + bns.PrimaryNode, Logger.severity.WARNING);
+					Logger.AlwaysLog("Failed to get node for: " + bns.PrimaryNode, Rynchodon.Logger.severity.WARNING);
 					continue;
 				}
 				RelayStorage store = node.Storage;
@@ -195,7 +271,7 @@ namespace Rynchodon.Update
 					store = node.Storage;
 					if (store == null)
 					{
-						m_logger.debugLog("failed to create storage for " + node.LoggingName, Logger.severity.ERROR);
+						Logger.AlwaysLog("failed to create storage for " + node.DebugName, Rynchodon.Logger.severity.ERROR);
 						continue;
 					}
 				}
@@ -206,10 +282,25 @@ namespace Rynchodon.Update
 					if (ls.IsValid)
 						store.Receive(ls);
 					else
-						m_logger.debugLog("failed to create a valid last seen from builder for " + bls.EntityId, Logger.severity.WARNING);
+					{
+						Logger.AlwaysLog("failed to create a valid last seen from builder for " + bls.EntityId, Rynchodon.Logger.severity.WARNING);
+						if (m_failedLastSeen == null)
+						{
+							m_failedLastSeen = new CachingDictionary<long, CachingList<LastSeen.Builder_LastSeen>>();
+							UpdateManager.Register(100, RetryLastSeen);
+						}
+						CachingList<LastSeen.Builder_LastSeen> list;
+						if (!m_failedLastSeen.TryGetValue(bns.PrimaryNode, out list))
+						{
+							list = new CachingList<LastSeen.Builder_LastSeen>();
+							m_failedLastSeen.Add(bns.PrimaryNode, list, true);
+						}
+						list.Add(bls);
+						list.ApplyAdditions();
+					}
 				}
 
-				m_logger.debugLog("added " + bns.LastSeenList.Length + " last seen to " + store.PrimaryNode.LoggingName, Logger.severity.DEBUG);
+				Logger.DebugLog("added " + bns.LastSeenList.Length + " last seen to " + store.PrimaryNode.DebugName, Rynchodon.Logger.severity.DEBUG);
 
 				// messages in the save file belong on the server
 				if (messages == null)
@@ -225,27 +316,27 @@ namespace Rynchodon.Update
 					}
 					else
 					{
-						m_logger.debugLog("found linked message", Logger.severity.TRACE);
+						Logger.DebugLog("found linked message", Rynchodon.Logger.severity.TRACE);
 					}
 					if (msg.IsValid)
 						store.Receive(msg);
 					else
-						m_logger.debugLog("failed to create a valid message from builder for " + bm.DestCubeBlock, Logger.severity.WARNING);
+						Logger.AlwaysLog("failed to create a valid message from builder for " + bm.DestCubeBlock + "/" + bm.SourceCubeBlock, Rynchodon.Logger.severity.WARNING);
 				}
 
-				m_logger.debugLog("added " + bns.MessageList.Length + " message to " + store.PrimaryNode.LoggingName, Logger.severity.DEBUG);
+				Logger.DebugLog("added " + bns.MessageList.Length + " message to " + store.PrimaryNode.DebugName, Rynchodon.Logger.severity.DEBUG);
 			}
 
 			// past this point, only synchronized data
 			if (!MyAPIGateway.Multiplayer.IsServer)
 			{
-				m_data = null;
+				data = null;
 				return;
 			}
 
 			// system disruption
 
-			foreach (Disruption.Builder_Disruption bd in m_data.SystemDisruption)
+			foreach (Disruption.Builder_Disruption bd in data.SystemDisruption)
 			{
 				Disruption disrupt;
 				switch (bd.Type)
@@ -278,7 +369,7 @@ namespace Rynchodon.Update
 						disrupt = new TraitorTurret();
 						break;
 					default:
-						m_logger.alwaysLog("Unknown disruption: " + bd.Type, Logger.severity.WARNING);
+						Logger.AlwaysLog("Unknown disruption: " + bd.Type, Rynchodon.Logger.severity.WARNING);
 						continue;
 				}
 				disrupt.Start(bd);
@@ -286,64 +377,70 @@ namespace Rynchodon.Update
 
 			// autopilot
 
-			if (m_data.Autopilot != null)
-				foreach (ShipAutopilot.Builder_Autopilot ba in m_data.Autopilot)
+			if (data.Autopilot != null)
+				foreach (ShipAutopilot.Builder_Autopilot ba in data.Autopilot)
 				{
 					ShipAutopilot autopilot;
 					if (Registrar.TryGetValue(ba.AutopilotBlock, out autopilot))
 						autopilot.ResumeFromSave(ba);
 					else
-						m_logger.alwaysLog("failed to find autopilot block " + ba.AutopilotBlock, Logger.severity.WARNING);
+						Logger.AlwaysLog("failed to find autopilot block " + ba.AutopilotBlock, Rynchodon.Logger.severity.WARNING);
 				}
 
 			// programmable block
 
-			if (m_data.ProgrammableBlock != null)
-				foreach (ProgrammableBlock.Builder_ProgrammableBlock bpa in m_data.ProgrammableBlock)
+			if (data.ProgrammableBlock != null)
+				foreach (ProgrammableBlock.Builder_ProgrammableBlock bpa in data.ProgrammableBlock)
 				{
 					ProgrammableBlock pb;
 					if (Registrar.TryGetValue(bpa.BlockId, out pb))
 						pb.ResumeFromSave(bpa);
 					else
-						m_logger.alwaysLog("failed to find programmable block " + bpa.BlockId, Logger.severity.WARNING);
+						Logger.AlwaysLog("failed to find programmable block " + bpa.BlockId, Rynchodon.Logger.severity.WARNING);
 				}
 
 			// text panel
 
-			if (m_data.TextPanel != null)
-				foreach (TextPanel.Builder_TextPanel btp in m_data.TextPanel)
+			if (data.TextPanel != null)
+				foreach (TextPanel.Builder_TextPanel btp in data.TextPanel)
 				{
 					TextPanel panel;
 					if (Registrar.TryGetValue(btp.BlockId, out panel))
 						panel.ResumeFromSave(btp);
 					else
-						m_logger.alwaysLog("failed to find text panel " + btp.BlockId, Logger.severity.WARNING);
+						Logger.AlwaysLog("failed to find text panel " + btp.BlockId, Rynchodon.Logger.severity.WARNING);
 				}
 
 			// weapon
 
-			if (m_data.Weapon != null)
-				foreach (WeaponTargeting.Builder_WeaponTargeting bwt in m_data.Weapon)
+			if (data.Weapon != null)
+				foreach (WeaponTargeting.Builder_WeaponTargeting bwt in data.Weapon)
 				{
 					WeaponTargeting targeting;
 					if (WeaponTargeting.TryGetWeaponTargeting(bwt.WeaponId, out targeting))
 						targeting.ResumeFromSave(bwt);
 					else
-						m_logger.alwaysLog("failed to find weapon " + bwt.WeaponId, Logger.severity.WARNING);
+						Logger.AlwaysLog("failed to find weapon " + bwt.WeaponId, Rynchodon.Logger.severity.WARNING);
 				}
 
 			// entity values
 
-			if (m_data.EntityValues != null)
-				EntityValue.ResumeFromSave(m_data.EntityValues);
+			if (data.EntityValues != null)
+				UpgradeEntityValue.Load(data.EntityValues);
 
-			m_data = null;
+			// sync
+			
+			if (data.Sync != null)
+				ASync.SetBuilder(data.Sync);
+
+			data = null;
 		}
 
 		/// <summary>
 		/// Saves data to a variable.
 		/// </summary>
-		public override void SaveData()
+		[OnWorldSave(Order = int.MaxValue)] // has to be last, obviously
+		private static void SaveData()
 		{
 			if (!MyAPIGateway.Multiplayer.IsServer)
 				return;
@@ -388,57 +485,24 @@ namespace Rynchodon.Update
 				});
 				data.Autopilot = buildAuto.ToArray();
 
-				//// programmable block
+				// Sync
 
-				//List<ProgrammableBlock.Builder_ProgrammableBlock> buildProgram = new List<ProgrammableBlock.Builder_ProgrammableBlock>();
-				//Registrar.ForEach<ProgrammableBlock>(program => {
-				//	ProgrammableBlock.Builder_ProgrammableBlock builder = program.GetBuilder();
-				//	if (builder != null)
-				//		buildProgram.Add(builder);
-				//});
-				//data.ProgrammableBlock = buildProgram.ToArray();
-
-				//// text panel
-
-				//List<TextPanel.Builder_TextPanel> buildPanel = new List<TextPanel.Builder_TextPanel>();
-				//Registrar.ForEach<TextPanel>(panel => {
-				//	TextPanel.Builder_TextPanel builder = panel.GetBuilder();
-				//	if (builder != null)
-				//		buildPanel.Add(builder);
-				//});
-				//data.TextPanel = buildPanel.ToArray();
-
-				//// weapon
-
-				//List<WeaponTargeting.Builder_WeaponTargeting> buildWeapon = new List<WeaponTargeting.Builder_WeaponTargeting>();
-				//Action<WeaponTargeting> act = weapon => {
-				//	WeaponTargeting.Builder_WeaponTargeting builder = weapon.GetBuilder();
-				//	if (builder != null)
-				//		buildWeapon.Add(builder);
-				//};
-				//Registrar.ForEach<FixedWeapon>(act);
-				//Registrar.ForEach<Turret>(act);
-				//data.Weapon = buildWeapon.ToArray();
-
-				// entity values
-
-				data.EntityValues = EntityValue.GetBuilders();
-
+				data.Sync = ASync.GetBuilder();
 
 				MyAPIGateway.Utilities.SetVariable(SaveXml, MyAPIGateway.Utilities.SerializeToXML(data));
 
-				if (m_fileMaster != null)
+				if (Instance.m_fileMaster != null)
 				{
-					string identifier = LegacyIdentifier();
+					string identifier = Instance.LegacyIdentifier(false);
 					if (identifier != null)
-						if (m_fileMaster.Delete(identifier))
-							m_logger.debugLog("file deleted: " + identifier);
+						if (Instance.m_fileMaster.Delete(identifier))
+							Rynchodon.Logger.DebugLog("file deleted: " + identifier);
 				}
 			}
 			catch (Exception ex)
 			{
-				m_logger.alwaysLog("Exception: " + ex, Logger.severity.ERROR);
-				Logger.Notify("ARMS: failed to save data", 60000, Logger.severity.ERROR);
+				Rynchodon.Logger.AlwaysLog("Exception: " + ex, Rynchodon.Logger.severity.ERROR);
+				Rynchodon.Logger.Notify("ARMS: failed to save data", 60000, Rynchodon.Logger.severity.ERROR);
 			}
 		}
 

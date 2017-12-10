@@ -1,8 +1,13 @@
-﻿using System;
+#if DEBUG
+//#define TRACE
+#endif
+
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Rynchodon.Settings;
 using Rynchodon.Update;
+using Rynchodon.Utility;
 using Rynchodon.Weapons;
 using Rynchodon.Weapons.Guided;
 using Sandbox.Game.Entities;
@@ -17,7 +22,7 @@ using VRageMath;
 
 namespace Rynchodon.AntennaRelay
 {
-	public class Player
+	public sealed class Player
 	{
 
 		private struct DistanceSeen : IComparable<DistanceSeen>
@@ -60,10 +65,8 @@ namespace Rynchodon.AntennaRelay
 
 		private IMyPlayer myPlayer { get { return MyAPIGateway.Session.Player; } }
 
-		private readonly Logger myLogger;
-
 		private readonly Dictionary<UserSettings.ByteSettingName, GpsData> Data = new Dictionary<UserSettings.ByteSettingName, GpsData>();
-		private readonly HashSet<MyEntity> m_updated = new HashSet<MyEntity>();
+		private readonly HashSet<IMyCubeGrid> m_haveTerminalAccess = new HashSet<IMyCubeGrid>();
 
 		private IMyEntity m_controlled;
 		private Func<RelayStorage> m_storage;
@@ -75,10 +78,10 @@ namespace Rynchodon.AntennaRelay
 		private GuidedMissile m_threat;
 		private ulong m_nextBeep;
 
+		private Logable Log { get { return new Logable(myPlayer?.DisplayName);  } }
+
 		public Player()
 		{
-			myLogger = new Logger(() => myPlayer.DisplayName) { MinimumLevel = Logger.severity.TRACE };
-
 			Data.Add(UserSettings.ByteSettingName.EnemiesOnHUD, new GpsData());
 			Data.Add(UserSettings.ByteSettingName.NeutralOnHUD, new GpsData());
 			Data.Add(UserSettings.ByteSettingName.FactionOnHUD, new GpsData());
@@ -89,11 +92,11 @@ namespace Rynchodon.AntennaRelay
 			List<IMyGps> list = MyAPIGateway.Session.GPS.GetGpsList(myPlayer.IdentityId);
 			if (list != null)
 			{
-				myLogger.debugLog("# of gps: " + list.Count);
+				Log.TraceLog("# of gps: " + list.Count);
 				foreach (IMyGps gps in list)
 					if (gps.Description != null && gps.Description.EndsWith(descrEnd))
 					{
-						myLogger.debugLog("old gps: " + gps.Name + ", " + gps.Coords);
+						Log.TraceLog("old gps: " + gps.Name + ", " + gps.Coords);
 						MyAPIGateway.Session.GPS.RemoveLocalGps(gps);
 					}
 			}
@@ -104,7 +107,7 @@ namespace Rynchodon.AntennaRelay
 			UpdateManager.Register(30, MissileHudWarning);
 			UpdateManager.Register(1, MissileAudioWarning);
 
-			myLogger.debugLog("initialized, player id: " + myPlayer.PlayerID + ", identity id: " + myPlayer.IdentityId, Logger.severity.DEBUG);
+			Log.DebugLog("initialized, identity id: " + myPlayer.IdentityId, Logger.severity.DEBUG);
 		}
 
 		private void Update()
@@ -122,23 +125,23 @@ namespace Rynchodon.AntennaRelay
 					RelayNode charNode;
 					if (!Registrar.TryGetValue(controlled, out charNode))
 					{
-						myLogger.debugLog("Failed to get node for character: " + controlled.getBestName(), Logger.severity.WARNING);
+						Log.DebugLog("Failed to get node for character: " + controlled.getBestName(), Logger.severity.WARNING);
 						m_storage = null;
 						return;
 					}
 					m_storage = () => charNode.Storage;
-					myLogger.debugLog("now controlling a character", Logger.severity.DEBUG);
+					Log.DebugLog("now controlling a character", Logger.severity.DEBUG);
 				}
 				else if (controlled is IMyCubeBlock)
 				{
 					IRelayPart shipClient = RelayClient.GetOrCreateRelayPart((IMyCubeBlock)controlled);
 					m_storage = shipClient.GetStorage;
 					m_soundEmitter = new MyEntity3DSoundEmitter((MyEntity)controlled);
-					myLogger.debugLog("now controlling a ship", Logger.severity.DEBUG);
+					Log.DebugLog("now controlling a ship", Logger.severity.DEBUG);
 				}
 				else
 				{
-					myLogger.debugLog("player controlling incompatible entity: " + controlled.getBestName(), Logger.severity.TRACE);
+					Log.TraceLog("player controlling incompatible entity: " + controlled.getBestName(), Logger.severity.TRACE);
 					m_storage = null;
 					m_soundEmitter = null;
 					m_threat = null;
@@ -147,7 +150,7 @@ namespace Rynchodon.AntennaRelay
 			}
 			else if (m_storage == null || m_storage.Invoke() == null)
 			{
-				myLogger.debugLog("no storage", Logger.severity.TRACE);
+				Log.TraceLog("no storage", Logger.severity.TRACE);
 				m_threat = null;
 				return;
 			}
@@ -165,7 +168,7 @@ namespace Rynchodon.AntennaRelay
 			byte newInterval = UserSettings.GetSetting(UserSettings.ByteSettingName.UpdateIntervalHUD);
 			if (newInterval != m_updateIntervalGPS)
 			{
-				myLogger.debugLog("Update interval changed from " + m_updateIntervalGPS + " to " + newInterval, Logger.severity.DEBUG);
+				Log.DebugLog("Update interval changed from " + m_updateIntervalGPS + " to " + newInterval, Logger.severity.DEBUG);
 
 				UpdateManager.Unregister(m_updateIntervalGPS, UpdateGPS);
 				UpdateManager.Register(newInterval, UpdateGPS);
@@ -174,7 +177,7 @@ namespace Rynchodon.AntennaRelay
 
 			if (m_storage == null)
 			{
-				myLogger.debugLog("no storage getter");
+				Log.TraceLog("no storage getter");
 				return;
 			}
 
@@ -182,13 +185,13 @@ namespace Rynchodon.AntennaRelay
 
 			if (store == null)
 			{
-				myLogger.debugLog("no storage");
+				Log.TraceLog("no storage");
 				return;
 			}
 
 			if (store.LastSeenCount == 0)
 			{
-				myLogger.debugLog("No LastSeen");
+				Log.TraceLog("No LastSeen");
 				return;
 			}
 
@@ -200,40 +203,68 @@ namespace Rynchodon.AntennaRelay
 				pair.Value.Prepare();
 			}
 
+			Log.TraceLog("primary node: " + store.PrimaryNode.DebugName);
+
+			m_haveTerminalAccess.Clear();
+			foreach (RelayNode node in Registrar.Scripts<RelayNode>())
+			{
+				MyCubeGrid grid = (node.Entity as MyCubeBlock)?.CubeGrid;
+				Log.TraceLog("grid: " + grid.nameWithId() + ", node storage: " + node.GetStorage()?.PrimaryNode.DebugName);
+				if (grid != null && node.GetStorage()?.PrimaryNode == store.PrimaryNode && m_haveTerminalAccess.Add(grid))
+					foreach (var aGrid in Attached.AttachedGrid.AttachedGrids(grid, Attached.AttachedGrid.AttachmentKind.Terminal, true))
+						m_haveTerminalAccess.Add(aGrid);
+			}
+
 			store.ForEachLastSeen((LastSeen seen) => {
+				Log.TraceLog("seen: " + seen.Entity.nameWithId());
+
 				if (!seen.isRecent())
+				{
+					Log.TraceLog("not recent: " + seen.Entity.nameWithId());
 					return;
+				}
 
 				if (seen.isRecent_Broadcast())
 				{
-					//myLogger.debugLog("already visible: " + seen.Entity.getBestName(), "UpdateGPS()");
+					Log.TraceLog("already visible: " + seen.Entity.getBestName());
+					return;
+				}
+
+				if (seen.Entity is IMyCubeGrid && m_haveTerminalAccess.Contains((IMyCubeGrid)seen.Entity))
+				{
+					Log.TraceLog("terminal linked: " + seen.Entity.nameWithId());
 					return;
 				}
 
 				UserSettings.ByteSettingName setting;
 				if (!CanDisplay(seen, out setting))
+				{
+					Log.TraceLog("cannot display: " + seen.Entity.nameWithId());
 					return;
+				}
 
 				GpsData relateData;
 				if (!Data.TryGetValue(setting, out relateData))
 				{
-					myLogger.debugLog("failed to get setting data, setting: " + setting, Logger.severity.WARNING);
+					Log.DebugLog("failed to get setting data, setting: " + setting, Logger.severity.WARNING);
 					return;
 				}
 
 				if (relateData.MaxOnHUD == 0)
+				{
+					Log.TraceLog("type not permitted: " + seen.Entity.nameWithId());
 					return;
+				}
 
+				Log.TraceLog("approved: " + seen.Entity.nameWithId());
 				float distance = Vector3.DistanceSquared(myPosition, seen.GetPosition());
 				relateData.distanceSeen.Add(new DistanceSeen(distance, seen));
 			});
 
-			m_updated.Clear(); 
+			m_haveTerminalAccess.Clear();
 			
 			foreach (var pair in Data)
 				UpdateGPS(pair.Key, pair.Value);
-
-			m_updated.Clear();
 		}
 
 		private void UpdateGPS(UserSettings.ByteSettingName setting, GpsData relateData)
@@ -243,7 +274,7 @@ namespace Rynchodon.AntennaRelay
 			int index;
 			for (index = 0; index < relateData.distanceSeen.Count && index < relateData.entities.Count; index++)
 			{
-				myLogger.debugLog("index(" + index + ") >= relateData.distanceSeen.Count(" + relateData.distanceSeen.Count + ")", Logger.severity.FATAL, condition: index >= relateData.distanceSeen.Count);
+				Log.DebugLog("index(" + index + ") >= relateData.distanceSeen.Count(" + relateData.distanceSeen.Count + ")", Logger.severity.FATAL, condition: index >= relateData.distanceSeen.Count);
 				LastSeen seen = relateData.distanceSeen[index].Seen;
 
 				// we do not display if it is broadcasting so there is no reason to use LastSeen.HostileName()
@@ -272,7 +303,7 @@ namespace Rynchodon.AntennaRelay
 						seRelate = MyRelationsBetweenPlayerAndBlock.Enemies;
 						break;
 					default:
-						myLogger.alwaysLog("case not implemented: " + setting, Logger.severity.ERROR);
+						Log.AlwaysLog("case not implemented: " + setting, Logger.severity.ERROR);
 						continue;
 				}
 
@@ -281,17 +312,18 @@ namespace Rynchodon.AntennaRelay
 				{
 					if (entity != seen.Entity)
 					{
-						if (!m_updated.Contains(entity))
-							MyHud.LocationMarkers.UnregisterMarker(entity);
+						Log.DebugLog("removing marker: " + entity.nameWithId());
+						MyHud.LocationMarkers.UnregisterMarker(entity);
 					}
-					else
-						continue;
+					//else if (MyHud.LocationMarkers.MarkerEntities.ContainsKey(entity))
+					//	continue;
 				}
 
 				entity = (MyEntity)seen.Entity;
 				relateData.entities[index] = entity;
-				m_updated.Add(entity);
-				MyHud.LocationMarkers.RegisterMarker(entity, new MyHudEntityParams() { FlagsEnum = MyHudIndicatorFlagsEnum.SHOW_ALL, Text = new StringBuilder(name), OffsetText = true, TargetMode = seRelate });
+				Log.DebugLog("adding marker: " + entity.nameWithId());
+				//MyHud.LocationMarkers.RegisterMarker(entity, new MyHudEntityParams() { FlagsEnum = MyHudIndicatorFlagsEnum.SHOW_ALL, Text = new StringBuilder(name), OffsetText = true, TargetMode = seRelate });
+				MyHud.LocationMarkers.RegisterMarker(entity, new MyHudEntityParams() { FlagsEnum = MyHudIndicatorFlagsEnum.SHOW_ALL, Text = new StringBuilder(name) });
 			}
 
 			// remove remaining
@@ -300,67 +332,12 @@ namespace Rynchodon.AntennaRelay
 				MyEntity entity = relateData.entities[index];
 				if (entity != null)
 				{
-					myLogger.debugLog("detritus: " + entity.nameWithId());
+					Log.DebugLog("removing marker: " + entity.nameWithId());
 					MyHud.LocationMarkers.UnregisterMarker(entity);
 					relateData.entities[index] = null;
 				}
 				index++;
 			}
-		}
-
-		private StringBuilder m_descrParts = new StringBuilder();
-
-		private string GetDescription(LastSeen seen)
-		{
-			m_descrParts.Clear();
-
-			if (seen.isRecent_Radar())
-				m_descrParts.Append("Has Radar, ");
-
-			if (seen.isRecent_Jam())
-				m_descrParts.Append("Has Jammer, ");
-
-			m_descrParts.Append("ID:");
-			m_descrParts.Append(seen.Entity.EntityId);
-			m_descrParts.Append(", ");
-
-			if (seen.RadarInfoIsRecent())
-			{
-				m_descrParts.Append(seen.Info.Pretty_Volume());
-				m_descrParts.Append(", ");
-			}
-
-			m_descrParts.Append(descrEnd);
-
-			return m_descrParts.ToString();
-		}
-
-		private bool Update(IMyGps gps, string name, string description, Vector3D coords)
-		{
-			bool updated = false;
-
-			if (gps.Name != name && name != null)
-			{
-				gps.Name = name;
-				updated = true;
-			}
-			if (gps.Description != description)
-			{
-				gps.Description = description;
-				updated = true;
-			}
-			if (gps.Coords != coords)
-			{
-				gps.Coords = coords;
-				updated = true;
-			}
-			if (!gps.ShowOnHud)
-			{
-				gps.ShowOnHud = true;
-				updated = true;
-			}
-
-			return updated;
 		}
 
 		private bool CanDisplay(LastSeen seen, out UserSettings.ByteSettingName settingName)
@@ -369,7 +346,7 @@ namespace Rynchodon.AntennaRelay
 			{
 				case LastSeen.EntityType.Character:
 				case LastSeen.EntityType.Grid:
-					switch (myPlayer.PlayerID.getRelationsTo(seen.Entity))
+					switch (myPlayer.IdentityId.getRelationsTo(seen.Entity))
 					{
 						case ExtensionsRelations.Relations.Enemy:
 						case ExtensionsRelations.Relations.NoOwner:
@@ -408,13 +385,13 @@ namespace Rynchodon.AntennaRelay
 		{
 			if (!(m_controlled is IMyCubeBlock))
 			{
-				//myLogger.debugLog("not controlling a ship");
+				//Log.DebugLog("not controlling a ship");
 				return;
 			}
 
 			if (m_storage == null)
 			{
-				myLogger.debugLog("no storage getter");
+				Log.TraceLog("no storage getter");
 				return;
 			}
 
@@ -422,7 +399,7 @@ namespace Rynchodon.AntennaRelay
 
 			if (store == null)
 			{
-				myLogger.debugLog("no storage");
+				Log.TraceLog("no storage");
 				return;
 			}
 
@@ -434,7 +411,7 @@ namespace Rynchodon.AntennaRelay
 					GuidedMissile guided;
 					if (Registrar.TryGetValue(seen.Entity, out guided) && IsThreat(guided))
 					{
-						myLogger.debugLog("threat: " + guided.MyEntity, Logger.severity.TRACE);
+						Log.DebugLog("threat: " + guided.MyEntity, Logger.severity.TRACE);
 						byte tti;
 						if (GetTimeToImpact(guided, out tti) && tti < timeToImpact)
 						{
@@ -489,7 +466,7 @@ namespace Rynchodon.AntennaRelay
 			if (!GetTimeToImpact(m_threat, out tti))
 			{
 				m_threat = null;
-				myLogger.debugLog("missile is no longer approaching", Logger.severity.DEBUG);
+				Log.DebugLog("missile is no longer approaching", Logger.severity.DEBUG);
 				return;
 			}
 

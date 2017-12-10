@@ -8,7 +8,6 @@ using Sandbox.Game.Gui;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using VRage.Utils;
 using VRageMath;
-using Sandbox.ModAPI;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
@@ -81,30 +80,21 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<IMyTerminalControl> controls)
 		{
-			IMyTerminalControlTextbox control;
-            //control = new MyTerminalControlTextbox<MyShipController>("RelativeCoordX", MyStringId.GetOrCompute("Rightward"), MyStringId.NullOrEmpty);
-            control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("RelativeCoordX");
-            control.Title = MyStringId.GetOrCompute("Rightward");
-            control.Tooltip = MyStringId.NullOrEmpty;
-            AddGetSet(control, 0);
+			MyTerminalControlTextbox<MyShipController> control;
+			control = new MyTerminalControlTextbox<MyShipController>("RelativeCoordX", MyStringId.GetOrCompute("Rightward"), MyStringId.GetOrCompute("Rightward from current position"));
+			AddGetSet(control, 0);
 			controls.Add(control);
 
-			//control = new MyTerminalControlTextbox<MyShipController>("RelativeCoordY", MyStringId.GetOrCompute("Upward"), MyStringId.NullOrEmpty);
-            control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("RelativeCoordY");
-            control.Title = MyStringId.GetOrCompute("Upward");
-            control.Tooltip = MyStringId.NullOrEmpty;
-            AddGetSet(control, 1);
+			control = new MyTerminalControlTextbox<MyShipController>("RelativeCoordY", MyStringId.GetOrCompute("Upward"), MyStringId.GetOrCompute("Upward from current position"));
+			AddGetSet(control, 1);
 			controls.Add(control);
 
-			//control = new MyTerminalControlTextbox<MyShipController>("RelativeCoordZ", MyStringId.GetOrCompute("Backward"), MyStringId.NullOrEmpty);
-            control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("RelativeCoordZ");
-            control.Title = MyStringId.GetOrCompute("Backward");
-            control.Tooltip = MyStringId.NullOrEmpty;
-            AddGetSet(control, 2);
+			control = new MyTerminalControlTextbox<MyShipController>("RelativeCoordZ", MyStringId.GetOrCompute("Backward"), MyStringId.GetOrCompute("Backward from current position"));
+			AddGetSet(control, 2);
 			controls.Add(control);
 		}
 
-		private void AddGetSet(IMyTerminalControlTextbox control, int index)
+		private void AddGetSet(MyTerminalControlTextbox<MyShipController> control, int index)
 		{
 			control.Getter = block => new StringBuilder(destination.GetDim(index).ToString());
 			control.Setter = (block, strBuild) => {
@@ -116,7 +106,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			};
 		}
 
-		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			if (!GetVector(command, out destination))
 			{

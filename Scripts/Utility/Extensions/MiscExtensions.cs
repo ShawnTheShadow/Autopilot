@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using Sandbox.Game.Entities;
-using Sandbox.ModAPI;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
@@ -58,7 +60,7 @@ namespace Rynchodon
 			entity = entity.GetTopMostParent();
 			if (entity.Physics == null)
 				return Vector3.Zero;
-			return entity.Physics.LinearVelocity * Globals.SimSpeed;
+			return entity.Physics.LinearVelocity;
 		}
 
 		public static Vector3D GetCentre(this IMyCubeBlock block)
@@ -87,10 +89,16 @@ namespace Rynchodon
 		}
 
 		public static void throwIfNull_argument(this object argument, string name)
-		{ VRage.Exceptions.ThrowIf<ArgumentNullException>(argument == null, name + " == null"); }
+		{
+			if (argument == null)
+				throw new ArgumentNullException(name);
+		}
 
 		public static void throwIfNull_variable(this object variable, string name)
-		{ VRage.Exceptions.ThrowIf<NullReferenceException>(variable == null, name + " == null"); }
+		{
+			if (variable == null)
+				throw new NullReferenceException(name);
+		}
 
 		public static string ToPrettySeconds(this VRage.Library.Utils.MyTimeSpan timeSpan)
 		{ return PrettySI.makePretty(timeSpan.Seconds) + 's'; }
@@ -333,6 +341,22 @@ namespace Rynchodon
 		public static bool IsValid(this double number)
 		{ return !double.IsNaN(number) && !double.IsInfinity(number); }
 
+		/// <summary>
+		/// Check that a value is a real number and not zero.
+		/// </summary>
+		public static bool ValidNonZero(this float number)
+		{
+			return !float.IsInfinity(number) && (0f < number || number < 0f);
+		}
+
+		/// <summary>
+		/// Check that a value is a real number and not zero.
+		/// </summary>
+		public static bool ValidNonZero(this double number)
+		{
+			return !double.IsInfinity(number) && (0d < number || number < 0d);
+		}
+
 		public static bool NullOrClosed(this IMyEntity entity)
 		{ return entity == null || entity.MarkedForClose || entity.Closed; }
 
@@ -352,7 +376,7 @@ namespace Rynchodon
 
 		public static bool EqualsIgnoreCapacity(this StringBuilder first, StringBuilder second)
 		{
-			if (object.ReferenceEquals(first, second))
+			if (ReferenceEquals(first, second))
 				return true;
 
 			if (first.Length != second.Length)
@@ -363,6 +387,11 @@ namespace Rynchodon
 					return false;
 
 			return true;
+		}
+
+		public static IEnumerable<T> ToEnumerable<T>(this T item)
+		{
+			yield return item;
 		}
 
 	}

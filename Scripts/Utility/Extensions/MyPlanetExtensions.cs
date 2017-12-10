@@ -1,6 +1,4 @@
 using Sandbox.Game.Entities;
-using Sandbox.ModAPI;
-using VRage.ModAPI;
 using VRageMath;
 
 namespace Rynchodon
@@ -16,23 +14,19 @@ namespace Rynchodon
 
 		public static MyPlanet GetClosestPlanet(Vector3D position, out double distSquared)
 		{
-			IMyVoxelBase closest = null;
-			double bestDistance = double.MaxValue;
-			MyAPIGateway.Session.VoxelMaps.GetInstances_Safe(null, voxel => {
-					if (voxel is MyPlanet)
-					{
-						double distance = Vector3D.DistanceSquared(position, voxel.GetCentre());
-						if (distance < bestDistance)
-						{
-							bestDistance = distance;
-							closest = voxel;
-						}
-					}
-				return false;
-			});
+			MyPlanet closest = null;
+			distSquared = double.MaxValue;
+			foreach (MyPlanet planet in Globals.AllPlanets())
+			{
+				double distance = Vector3D.DistanceSquared(position, planet.GetCentre());
+				if (distance < distSquared)
+				{
+					distSquared = distance;
+					closest = planet;
+				}
+			}
 
-			distSquared = bestDistance;
-			return (MyPlanet)closest;
+			return closest;
 		}
 
 		public static bool IsPositionInGravityWell(this MyPlanet planet, ref Vector3D worldPosition)
@@ -73,6 +67,11 @@ namespace Rynchodon
 		public static Vector3D GetWorldGravity(this MyPlanet planet, Vector3D worldPosition)
 		{
 			return planet.Components.Get<MyGravityProviderComponent>().GetWorldGravity(worldPosition);
+		}
+
+		public static float GetGravityLimit(this MyPlanet planet)
+		{
+			return ((MySphericalNaturalGravityComponent)planet.Components.Get<MyGravityProviderComponent>()).GravityLimit;
 		}
 
 	}

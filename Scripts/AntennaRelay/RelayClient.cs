@@ -1,5 +1,6 @@
 using System;
 using Rynchodon.Attached;
+using Rynchodon.Utility;
 using Sandbox.ModAPI;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
@@ -47,7 +48,6 @@ namespace Rynchodon.AntennaRelay
 		}
 
 		private readonly IMyCubeBlock m_block;
-		private readonly Logger m_logger;
 
 		private RelayNode value_node;
 		private ulong m_nextNodeSet;
@@ -56,6 +56,12 @@ namespace Rynchodon.AntennaRelay
 
 		private Action<Message> m_messageHandler;
 
+		public string DebugName { get { return m_block.nameWithId(); } }
+		public long OwnerId { get { return m_block.OwnerId; } }
+
+		private Logable Log
+		{ get { return new Logable(m_block); } }
+
 		/// <summary>
 		/// Use GetOrCreateRelayPart if client may already exist.
 		/// </summary>
@@ -63,7 +69,6 @@ namespace Rynchodon.AntennaRelay
 		{
 			this.m_block = block;
 			this.m_messageHandler = messageHandler;
-			this.m_logger = new Logger(block);
 
 			Registrar.Add(block, this);
 		}
@@ -108,7 +113,7 @@ namespace Rynchodon.AntennaRelay
 			RelayNode node = GetNode();
 			RelayStorage store = node != null ? node.Storage : null;
 
-			m_logger.debugLog("current storage: " + StorageName(m_storage) + ", new storage: " + StorageName(store), condition: m_storage != store);
+			Log.DebugLog("current storage: " + StorageName(m_storage) + ", new storage: " + StorageName(store), condition: m_storage != store);
 			if (store != m_storage && m_messageHandler != null)
 			{
 				if (m_storage != null)
@@ -126,7 +131,7 @@ namespace Rynchodon.AntennaRelay
 				return "null";
 			if (store.PrimaryNode == null)
 				return "NetworkStorage without PrimaryNode!";
-			return store.PrimaryNode.LoggingName;
+			return store.PrimaryNode.DebugName;
 		}
 
 	}

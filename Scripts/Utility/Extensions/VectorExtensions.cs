@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using VRageMath;
 
 namespace Rynchodon
@@ -125,17 +126,23 @@ namespace Rynchodon
 			return "GPS:" + name + ':' + vec.X + ':' + vec.Y + ':' + vec.Z + ':';
 		}
 
-		public static string ToPretty(this Vector3 vec)
+		public static string ToPretty(this Vector3 vec, byte sigFigs = 3)
 		{
-			return '{' + PrettySI.makePretty(vec.X, 3, false) + ", " + PrettySI.makePretty(vec.Y, 3, false) + ", " + PrettySI.makePretty(vec.Z, 3, false) + '}';
+			return '{' + PrettySI.makePretty(vec.X, sigFigs, false) + ", " + PrettySI.makePretty(vec.Y, sigFigs, false) + ", " + PrettySI.makePretty(vec.Z, sigFigs, false) + '}';
 		}
 
-		public static string ToPretty(this Vector3D vec)
+		public static string ToPretty(this Vector3D vec, byte sigFigs = 3)
 		{
-			return '{' + PrettySI.makePretty(vec.X, 3, false) + ", " + PrettySI.makePretty(vec.Y, 3, false) + ", " + PrettySI.makePretty(vec.Z, 3, false) + '}';
+			return '{' + PrettySI.makePretty(vec.X, sigFigs, false) + ", " + PrettySI.makePretty(vec.Y, sigFigs, false) + ", " + PrettySI.makePretty(vec.Z, sigFigs, false) + '}';
 		}
 
 		public static int DistanceSquared(this Vector3I vec, Vector3I sec)
+		{
+			int X = vec.X - sec.X, Y = vec.Y - sec.Y, Z = vec.Z - sec.Z;
+			return X * X + Y * Y + Z * Z;
+		}
+
+		public static int DistanceSquared(ref Vector3I vec, ref Vector3I sec)
 		{
 			int X = vec.X - sec.X, Y = vec.Y - sec.Y, Z = vec.Z - sec.Z;
 			return X * X + Y * Y + Z * Z;
@@ -156,6 +163,95 @@ namespace Rynchodon
 			result.M31 = result.M13;
 			result.M32 = result.M23;
 			return result;
+		}
+
+		/// <summary>
+		/// Perform a vector rejection and additionally return the magnitude of the vector projection.
+		/// </summary>
+		/// <param name="vector">The vector to reject.</param>
+		/// <param name="direction">The normalized direction vector to reject from.</param>
+		/// <param name="projectionDistance">The length of the projection. i.e. Dot(vector, direction)</param>
+		/// <param name="rejection">The rejection of vector from direction.</param>
+		public static void RejectNormalized(ref Vector3 vector, ref Vector3 direction, out float projectionDistance, out Vector3 rejection)
+		{
+			projectionDistance = vector.X * direction.X + vector.Y * direction.Y + vector.Z * direction.Z;
+			rejection.X = vector.X - direction.X * projectionDistance;
+			rejection.Y = vector.Y - direction.Y * projectionDistance;
+			rejection.Z = vector.Z - direction.Z * projectionDistance;
+		}
+
+		public static void RoundTo(ref Vector3 vector, float roundTo)
+		{
+			float halfRound = roundTo * 0.5f;
+
+			float value = vector.X;
+			float mod = value % roundTo;
+			value -= mod;
+			if (value >= 0f ? mod >= halfRound : mod < -halfRound)
+				value += roundTo;
+			vector.X = value;
+
+			value = vector.Y;
+			mod = value % roundTo;
+			value -= mod;
+			if (value >= 0f ? mod >= halfRound : mod < -halfRound)
+				value += roundTo;
+			vector.Y = value;
+
+			value = vector.Z;
+			mod = value % roundTo;
+			value -= mod;
+			if (value >= 0f ? mod >= halfRound : mod < -halfRound)
+				value += roundTo;
+			vector.Z = value;
+		}
+
+		public static void RoundTo(ref Vector3D vector, double roundTo)
+		{
+			double halfRound = roundTo * 0.5d;
+
+			double value = vector.X;
+			double mod = value % roundTo;
+			value -= mod;
+			if (value >= 0d ? mod >= halfRound : mod < -halfRound)
+				value += roundTo;
+			vector.X = value;
+
+			value = vector.Y;
+			mod = value % roundTo;
+			value -= mod;
+			if (value >= 0d ? mod >= halfRound : mod < -halfRound)
+				value += roundTo;
+			vector.Y = value;
+
+			value = vector.Z;
+			mod = value % roundTo;
+			value -= mod;
+			if (value >= 0d ? mod >= halfRound : mod < -halfRound)
+				value += roundTo;
+			vector.Z = value;
+		}
+
+		public static int Min(this Vector3I vector)
+		{
+			return Math.Min(vector.X, Math.Min(vector.Y, vector.Z));
+		}
+
+		public static int Max(this Vector3I vector)
+		{
+			return Math.Max(vector.X, Math.Max(vector.Y, vector.Z));
+		}
+
+		[Conditional("DEBUG")]
+		public static void AssertNormalized(this Vector3 vector, string vectorName = "vector")
+		{
+			Debug.Assert(Math.Abs(vector.LengthSquared() - 1f) < 0.01f, vectorName + " is not normalized");
+		}
+
+		[Conditional("DEBUG")]
+		public static void AssertNormalized(this Vector3D vector, string vectorName = "vector")
+		{
+			Debug.Assert(Math.Abs(vector.LengthSquared() - 1d) < 0.01d, vectorName + " is not normalized");
 		}
 
 	}

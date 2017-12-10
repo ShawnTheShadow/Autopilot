@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -38,7 +38,7 @@ namespace Rynchodon.AntennaRelay
 			ThisShip = 128,
 			OnOff = 16,
 			IntegrityColours = 32,
-			ShowOffset = 64
+			//ShowOffset = 64
 		}
 
 		private class StaticVariables
@@ -50,17 +50,225 @@ namespace Rynchodon.AntennaRelay
 			/// <summary>Maximum time since detection for entity to be kept in cache.</summary>
 			public readonly TimeSpan keepInCache = new TimeSpan(0, 1, 0);
 
-			public readonly Logger logger = new Logger();
 			public readonly List<IMyTerminalControl> TermControls = new List<IMyTerminalControl>();
 			public readonly List<IMyTerminalControl> TermControls_Colours = new List<IMyTerminalControl>();
 			public readonly List<IMyTerminalControl> TermControls_Offset = new List<IMyTerminalControl>();
 
-			public bool MouseControls;
+			public bool MouseControls, ShowOffset;
 			public Color
 				value_IntegrityFull = new Color(UserSettings.GetSetting(UserSettings.IntSettingName.IntegrityFull)),
 				value_IntegrityFunctional = new Color(UserSettings.GetSetting(UserSettings.IntSettingName.IntegrityFunctional)),
 				value_IntegrityDamaged = new Color(UserSettings.GetSetting(UserSettings.IntSettingName.IntegrityDamaged)),
 				value_IntegrityZero = new Color(UserSettings.GetSetting(UserSettings.IntSettingName.IntegrityZero));
+
+			public StaticVariables()
+			{
+				Logger.DebugLog("entered", Logger.severity.TRACE);
+				MyAPIGateway.Session.DamageSystem.RegisterAfterDamageHandler((int)MyDamageSystemPriority.Low, AfterDamageHandler);
+
+				TerminalControlHelper.EnsureTerminalControlCreated<MySpaceProjector>();
+
+				TermControls.Add(new MyTerminalControlSeparator<MySpaceProjector>());
+
+				AddCheckbox("HoloDisplay", "Holographic Display", "Holographically display this ship and nearby detected ships", Option.OnOff);
+				AddCheckbox("HD_This_Ship", "This Ship", "Holographically display this ship", Option.ThisShip);
+				AddCheckbox("HD_Owner", "Owned Ships", "Holographically display ships owned by this block's owner", Option.Owner);
+				AddCheckbox("HD_Faction", "Faction Ships", "Holographically display faction owned ships", Option.Faction);
+				AddCheckbox("HD_Neutral", "Neutral Ships", "Holographically display neutral ships", Option.Neutral);
+				AddCheckbox("HD_Enemy", "Enemy Ships", "Holographically display enemy ships", Option.Enemy);
+
+				MyTerminalControlSlider<MySpaceProjector> slider = new MyTerminalControlSlider<MySpaceProjector>("HD_RangeDetection", MyStringId.GetOrCompute("Detection Range"), MyStringId.GetOrCompute("Maximum distance of detected entity"));
+				ValueSync<float, Projector> tvsRange = new ValueSync<float, Projector>(slider, (proj) => proj.m_rangeDetection, (proj, value) => proj.m_rangeDetection = value);
+				slider.DefaultValue = DefaultRangeDetection;
+				slider.Normalizer = (block, value) => Normalizer(MinRangeDetection, MaxRangeDetection, block, value);
+				slider.Denormalizer = (block, value) => Denormalizer(MinRangeDetection, MaxRangeDetection, block, value);
+				slider.Writer = (block, sb) => WriterMetres(tvsRange.GetValue(block), sb);
+				TermControls.Add(slider);
+
+				slider = new MyTerminalControlSlider<MySpaceProjector>("HD_RadiusHolo", MyStringId.GetOrCompute("Hologram Radius"), MyStringId.GetOrCompute("Maximum radius of hologram"));
+				ValueSync<float, Projector>  tvsRadius = new ValueSync<float, Projector>(slider, (proj) => proj.m_radiusHolo, (proj, value) => proj.m_radiusHolo = value);
+				slider.DefaultValue = DefaultRadiusHolo;
+				slider.Normalizer = (block, value) => Normalizer(MinRadiusHolo, MaxRadiusHolo, block, value);
+				slider.Denormalizer = (block, value) => Denormalizer(MinRadiusHolo, MaxRadiusHolo, block, value);
+				slider.Writer = (block, sb) => WriterMetres(tvsRadius.GetValue(block), sb);
+				TermControls.Add(slider);
+
+				slider = new MyTerminalControlSlider<MySpaceProjector>("HD_EntitySizeScale", MyStringId.GetOrCompute("Entity Size Scale"), MyStringId.GetOrCompute("Larger value causes entities to appear larger"));
+				ValueSync<float, Projector> tvsScale = new ValueSync<float, Projector>(slider, (proj) => proj.m_sizeDistScale, (proj, value) => proj.m_sizeDistScale = value);
+				slider.DefaultValue = DefaultSizeScale;
+				slider.Normalizer = (block, value) => Normalizer(MinSizeScale, MaxSizeScale, block, value);
+				slider.Denormalizer = (block, value) => Denormalizer(MinSizeScale, MaxSizeScale, block, value);
+				slider.Writer = (block, sb) => sb.Append(tvsScale.GetValue(block));
+				TermControls.Add(slider);
+
+				TermControls.Add(new MyTerminalControlSeparator<MySpaceProjector>());
+
+				MyTerminalControlCheckbox<MySpaceProjector> control = new MyTerminalControlCheckbox<MySpaceProjector>("HD_MouseControls", MyStringId.GetOrCompute("Mouse Controls"),
+					MyStringId.GetOrCompute("Allow manipulation of hologram with mouse. User-specific setting."));
+				IMyTerminalValueControl<bool> valueControlBool = control;
+				valueControlBool.Getter = block => MouseControls;
+				valueControlBool.Setter = (block, value) => MouseControls = value;
+				TermControls.Add(control);
+
+				control = new MyTerminalControlCheckbox<MySpaceProjector>("HD_ShowBoundary", MyStringId.GetOrCompute("Show Boundary"), MyStringId.GetOrCompute("Show the boundaries of the hologram. User-specific setting."));
+				valueControlBool = control;
+				valueControlBool.Getter = block => ShowBoundary;
+				valueControlBool.Setter = (block, value) => ShowBoundary = value;
+				TermControls.Add(control);
+
+				control = new MyTerminalControlCheckbox<MySpaceProjector>("HD_ShowOffset", MyStringId.GetOrCompute("Show Offset Controls"), MyStringId.GetOrCompute("Display controls that can be used to adjust the position of the hologram. User-specific setting."));
+				control.Getter = block => ShowOffset;
+				control.Setter = (block, value) => {
+					ShowOffset = value;
+					block.RebuildControls();
+				};
+				TermControls.Add(control);
+
+				AddOffsetSlider("HD_OffsetX", "Right/Left Offset", "+ve moves hologram to the right, -ve moves hologram to the left", 0);
+				AddOffsetSlider("HD_OffsetY", "Up/Down Offset", "+ve moves hologram up, -ve moves hologram down", 1);
+				AddOffsetSlider("HD_OffsetZ", "Back/Fore Offset", "+ve moves hologram back, -ve moves hologram forward", 2);
+
+				TermControls_Offset.Add(new MyTerminalControlSeparator<MySpaceProjector>());
+
+				AddCheckbox("HD_IntegrityColour", "Colour by Integrity", "Colour blocks according to their integrities", Option.IntegrityColours);
+
+				IMyTerminalControlColor colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, IMyProjector>("HD_FullIntegriyColour");
+				colour.Title = MyStringId.GetOrCompute("Whole");
+				colour.Tooltip = MyStringId.GetOrCompute("Colour when block has full integrity. User-specific setting.");
+				colour.Getter = (block) => IntegrityFull;
+				colour.Setter = (block, value) => IntegrityFull = value;
+				TermControls_Colours.Add(colour);
+
+				colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, IMyProjector>("HD_CriticalIntegriyColour");
+				colour.Title = MyStringId.GetOrCompute("Func.");
+				colour.Tooltip = MyStringId.GetOrCompute("Colour when block is just above critical integrity. User-specific setting.");
+				colour.Getter = (block) => IntegrityFunctional;
+				colour.Setter = (block, value) => IntegrityFunctional = value;
+				TermControls_Colours.Add(colour);
+
+				colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, IMyProjector>("HD_CriticalIntegriyColour");
+				colour.Title = MyStringId.GetOrCompute("Broken");
+				colour.Tooltip = MyStringId.GetOrCompute("Colour when block is just below critical integrity. User-specific setting.");
+				colour.Getter = (block) => IntegrityDamaged;
+				colour.Setter = (block, value) => IntegrityDamaged = value;
+				TermControls_Colours.Add(colour);
+
+				colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, IMyProjector>("HD_ZeroIntegriyColour");
+				colour.Title = MyStringId.GetOrCompute("Razed");
+				colour.Tooltip = MyStringId.GetOrCompute("Colour when block has zero integrity. User-specific setting.");
+				colour.Getter = (block) => IntegrityZero;
+				colour.Setter = (block, value) => IntegrityZero = value;
+				TermControls_Colours.Add(colour);
+
+				new ValueSync<long, Projector>("CentreEntity",
+					 (script) => script.m_centreEntityId, 
+					(script, value) => {
+					script.m_centreEntityId = value;
+					script.m_centreEntityId_AfterValueChanged();
+				});
+			}
+
+			#region Terminal Controls
+
+			private void AddCheckbox(string id, string title, string toolTip, Option opt)
+			{
+				MyTerminalControlCheckbox<MySpaceProjector> control = new MyTerminalControlCheckbox<MySpaceProjector>(id, MyStringId.GetOrCompute(title), MyStringId.GetOrCompute(toolTip));
+
+				new ValueSync<bool, Projector>(control,
+					(proj) => (proj.m_options & opt) == opt,
+					(proj, value) => {
+						Logger.DebugLog("set option: " + opt + " to " + value + ", current options: " + proj.m_options);
+						if (value)
+							proj.m_options |= opt;
+						else
+							proj.m_options &= ~opt;
+						if (opt == Option.OnOff || opt == Option.IntegrityColours)
+							proj.m_block.RebuildControls();
+					});
+
+				TermControls.Add(control);
+			}
+
+			private void AddOffsetSlider(string id, string title, string toolTip, int dim)
+			{
+				MyTerminalControlSlider<MySpaceProjector> control = new MyTerminalControlSlider<MySpaceProjector>(id, MyStringId.GetOrCompute(title), MyStringId.GetOrCompute(toolTip));
+
+				ValueSync<float, Projector> tvs = new ValueSync<float, Projector>(control, (proj) => proj.m_offset_ev.GetDim(dim), (proj, value) => proj.m_offset_ev.SetDim(dim, value));
+
+				control.DefaultValue = dim == 1 ? 2.5f : 0f;
+				control.Normalizer = (block, value) => Normalizer(MinOffset, MaxOffset, block, value);
+				control.Denormalizer = (block, value) => Denormalizer(MinOffset, MaxOffset, block, value);
+				control.Writer = (block, sb) => WriterMetres(tvs.GetValue(block), sb);
+				TermControls_Offset.Add(control);
+			}
+
+			public void CustomControlGetter(IMyTerminalBlock block, List<IMyTerminalControl> controls)
+			{
+				if (!(block is IMyProjector))
+					return;
+
+				Projector instance;
+				if (!Registrar.TryGetValue(block, out instance))
+				{
+					if (!Globals.WorldClosed)
+						Logger.AlwaysLog("Failed to get block: " + block.nameWithId());
+					return;
+				}
+
+				controls.Add(TermControls[0]);
+				controls.Add(TermControls[1]);
+
+				if (instance.GetOption(Option.OnOff))
+				{
+					// find show on hud
+					int indexSOH = 0;
+					for (; indexSOH < controls.Count && controls[indexSOH].Id != "ShowOnHUD"; indexSOH++) ;
+					// remove all controls after ShowOnHUD and before separator
+					controls.RemoveRange(indexSOH + 1, controls.Count - indexSOH - 3);
+
+					bool showOffset = ShowOffset;
+
+					for (int index = 2; index < TermControls.Count; index++)
+					{
+						controls.Add(TermControls[index]);
+						if (showOffset && TermControls[index].Id == "HD_ShowOffset")
+						{
+							showOffset = false;
+							foreach (var offset in TermControls_Offset)
+								controls.Add(offset);
+						}
+					}
+
+					if (instance.GetOption(Option.IntegrityColours))
+						foreach (var colour in TermControls_Colours)
+							controls.Add(colour);
+				}
+			}
+
+			private float Normalizer(float min, float max, IMyTerminalBlock block, float value)
+			{
+				return (value - min) / (max - min);
+			}
+
+			private float Denormalizer(float min, float max, IMyTerminalBlock block, float value)
+			{
+				return min + value * (max - min);
+			}
+
+			private void WriterMetres(float value, StringBuilder stringBuilder)
+			{
+				stringBuilder.Append(PrettySI.makePretty(value));
+				stringBuilder.Append("m");
+			}
+
+			public void UpdateVisual()
+			{
+				foreach (var control in TermControls)
+					control.UpdateVisual();
+			}
+
+			#endregion Terminal Controls
+
 		}
 
 		public static Color IntegrityFull
@@ -123,320 +331,21 @@ namespace Rynchodon.AntennaRelay
 		private const float MinOffset = -20f, MaxOffset = 20f;
 		private const double CrosshairRange = 20d;
 
-		private static StaticVariables Static = new StaticVariables();
+		private static StaticVariables Static;
 
-		static Projector()
+		[OnWorldLoad]
+		private static void Init()
 		{
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
-			//MyTerminalControls.Static.CustomControlGetter += CustomControlGetter;
-            MyAPIGateway.TerminalControls.CustomControlGetter += CustomControlGetter;
-
-			MyAPIGateway.Session.DamageSystem.RegisterAfterDamageHandler((int)MyDamageSystemPriority.Low, AfterDamageHandler);
-
-            //MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MySpaceProjector>());
-            MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyProjector>("separator");
-
-			AddCheckbox("HoloDisplay", "Holographic Display", "Holographically display this ship and nearby detected ships", Option.OnOff);
-			AddCheckbox("HD_This Ship", "This Ship", "Holographically display this ship", Option.ThisShip);
-			AddCheckbox("HD_Owner", "Owned Ships", "Holographically display ships owned by this block's owner", Option.Owner);
-			AddCheckbox("HD_Faction", "Faction Ships", "Holographically display faction owned ships", Option.Faction);
-			AddCheckbox("HD_Neutral", "Neutral Ships", "Holographically display neutral ships", Option.Neutral);
-			AddCheckbox("HD_Enemy", "Enemy Ships", "Holographically display enemy ships", Option.Enemy);
-
-            //MyTerminalControlSlider<MySpaceProjector> slider = new MyTerminalControlSlider<MySpaceProjector>("HD_RangeDetection", MyStringId.GetOrCompute("Detection Range"), MyStringId.GetOrCompute("Maximum distance of detected entity"));
-            IMyTerminalControlSlider slider = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyProjector>("HD_RangeDetection");
-            slider.Title = MyStringId.GetOrCompute("Detection Range");
-            slider.Tooltip = MyStringId.GetOrCompute("Maximum distance of detected entity");
-            slider.SetLimits(MinRangeDetection, MaxRangeDetection);
-			//slider.DefaultValue = DefaultRangeDetection;
-			//slider.Normalizer = (block, value) => Normalizer(MinRangeDetection, MaxRangeDetection, block, value);
-			//slider.Denormalizer = (block, value) => Denormalizer(MinRangeDetection, MaxRangeDetection, block, value);
-			slider.Writer = (block, sb) => WriterMetres(GetRangeDetection, block, sb);
-			IMyTerminalValueControl<float> valueControl = slider;
-			valueControl.Getter = GetRangeDetection;
-			valueControl.Setter = SetRangeDetection;
-			Static.TermControls.Add(slider);
-
-            //slider = new MyTerminalControlSlider<MySpaceProjector>("HD_RadiusHolo", MyStringId.GetOrCompute("Hologram Radius"), MyStringId.GetOrCompute("Maximum radius of hologram"));
-            slider = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyProjector>("HD_RadiusHolo");
-            slider.Title = MyStringId.GetOrCompute("Hologram Radius");
-            slider.Tooltip = MyStringId.GetOrCompute("Maximum radius of hologram");
-            slider.SetLimits(MinRadiusHolo, MaxRadiusHolo);
-			/*slider.DefaultValue = DefaultRadiusHolo;
-			slider.Normalizer = (block, value) => Normalizer(MinRadiusHolo, MaxRadiusHolo, block, value);
-			slider.Denormalizer = (block, value) => Denormalizer(MinRadiusHolo, MaxRadiusHolo, block, value);*/
-			slider.Writer = (block, sb) => WriterMetres(GetRadiusHolo, block, sb);
-			valueControl = slider;
-			valueControl.Getter = GetRadiusHolo;
-			valueControl.Setter = SetRadiusHolo;
-			Static.TermControls.Add(slider);
-
-			//slider = new MyTerminalControlSlider<MySpaceProjector>("HD_EntitySizeScale", MyStringId.GetOrCompute("Entity Size Scale"), MyStringId.GetOrCompute("Larger value causes entities to appear larger"));
-            slider = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyProjector>("HD_EntitySizeScale");
-            slider.Title = MyStringId.GetOrCompute("Entity Size Scale");
-            slider.Tooltip = MyStringId.GetOrCompute("Larger value causes entities to appear larger");
-            slider.SetLimits(MinSizeScale, MaxSizeScale);
-            /*slider.DefaultValue = DefaultSizeScale;
-			slider.Normalizer = (block, value) => Normalizer(MinSizeScale, MaxSizeScale, block, value);
-			slider.Denormalizer = (block, value) => Denormalizer(MinSizeScale, MaxSizeScale, block, value);*/
-			slider.Writer = (block, sb) => sb.Append(GetSizeScale(block));
-			valueControl = slider;
-			valueControl.Getter = GetSizeScale;
-			valueControl.Setter = SetSizeScale;
-			Static.TermControls.Add(slider);
-
-			//Static.TermControls.Add(new MyTerminalControlSeparator<MySpaceProjector>());
-            Static.TermControls.Add(MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyProjector>("Separator"));
-
-            //MyTerminalControlCheckbox<MySpaceProjector> control = new MyTerminalControlCheckbox<MySpaceProjector>("HD_MouseControls", MyStringId.GetOrCompute("Mouse Controls"),
-            //MyStringId.GetOrCompute("Allow manipulation of hologram with mouse. User-specific setting."));
-            IMyTerminalControlCheckbox control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyProjector>("HD_MouseControls");
-            control.Title = MyStringId.GetOrCompute("Mouse Controls");
-            control.Tooltip = MyStringId.GetOrCompute("Allow manipulation of hologram with mouse. User-specific setting.");
-            IMyTerminalValueControl<bool> valueControlBool = control;
-            valueControlBool.Getter = block => Static.MouseControls;
-			valueControlBool.Setter = (block, value) => Static.MouseControls = value;
-			Static.TermControls.Add(control);
-
-            //control = new MyTerminalControlCheckbox<MySpaceProjector>("HD_ShowBoundary", MyStringId.GetOrCompute("Show Boundary"), MyStringId.GetOrCompute("Show the boundaries of the hologram. User-specific setting."));
-            control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyProjector>("HD_ShowBoundary");
-            control.Title = MyStringId.GetOrCompute("Show Boundary");
-            control.Tooltip = MyStringId.GetOrCompute("Show the boundaries of the hologram. User-specific setting.");
-			valueControlBool = control;
-			valueControlBool.Getter = block => ShowBoundary;
-			valueControlBool.Setter = (block, value) => ShowBoundary = value;
-			Static.TermControls.Add(control);
-
-			AddCheckbox("HD_ShowOffset", "Show Offset Controls", "Display controls that can be used to adjust the position of the hologram", Option.ShowOffset);
-
-			AddOffsetSlider("HD_OffsetX", "Right/Left Offset", "+ve moves hologram to the right, -ve moves hologram to the left", 0);
-			AddOffsetSlider("HD_OffsetY", "Up/Down Offset", "+ve moves hologram up, -ve moves hologram down", 1);
-			AddOffsetSlider("HD_OffsetZ", "Back/Fore Offset", "+ve moves hologram back, -ve moves hologram forward", 2);
-
-            //Static.TermControls_Offset.Add(new MyTerminalControlSeparator<MySpaceProjector>());
-            Static.TermControls_Offset.Add(MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyProjector>("separator"));
-
-			AddCheckbox("HD_IntegrityColour", "Colour by Integrity", "Colour blocks according to their integrities", Option.IntegrityColours);
-
-			IMyTerminalControlColor colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, IMyProjector>("HD_FullIntegriyColour");
-			colour.Title = MyStringId.GetOrCompute("Whole");
-			colour.Tooltip = MyStringId.GetOrCompute("Colour when block has full integrity. User-specific setting.");
-			colour.Getter = (block) => IntegrityFull;
-			colour.Setter = (block, value) => IntegrityFull = value;
-			Static.TermControls_Colours.Add(colour);
-
-			colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, IMyProjector>("HD_CriticalIntegriyColour");
-			colour.Title = MyStringId.GetOrCompute("Func.");
-			colour.Tooltip = MyStringId.GetOrCompute("Colour when block is just above critical integrity. User-specific setting.");
-			colour.Getter = (block) => IntegrityFunctional;
-			colour.Setter = (block, value) => IntegrityFunctional = value;
-			Static.TermControls_Colours.Add(colour);
-
-			colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, IMyProjector>("HD_CriticalIntegriyColour");
-			colour.Title = MyStringId.GetOrCompute("Broken");
-			colour.Tooltip = MyStringId.GetOrCompute("Colour when block is just below critical integrity. User-specific setting.");
-			colour.Getter = (block) => IntegrityDamaged;
-			colour.Setter = (block, value) => IntegrityDamaged = value;
-			Static.TermControls_Colours.Add(colour);
-
-			colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, IMyProjector>("HD_ZeroIntegriyColour");
-			colour.Title = MyStringId.GetOrCompute("Razed");
-			colour.Tooltip = MyStringId.GetOrCompute("Colour when block has zero integrity. User-specific setting.");
-			colour.Getter = (block) => IntegrityZero;
-			colour.Setter = (block, value) => IntegrityZero = value;
-			Static.TermControls_Colours.Add(colour);
+			Static = new StaticVariables();
+			MyTerminalControls.Static.CustomControlGetter += Static.CustomControlGetter;
 		}
 
-		private static void Entities_OnCloseAll()
+		[OnWorldClose]
+		private static void Unload()
 		{
-			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
-			//MyTerminalControls.Static.CustomControlGetter -= CustomControlGetter;
-            MyAPIGateway.TerminalControls.CustomControlGetter -= CustomControlGetter;
+			MyTerminalControls.Static.CustomControlGetter -= Static.CustomControlGetter;
 			Static = null;
 		}
-
-		#region Terminal Controls
-
-		private static void AddCheckbox(string id, string title, string toolTip, Option opt)
-		{
-			//MyTerminalControlCheckbox<MySpaceProjector> control = new MyTerminalControlCheckbox<MySpaceProjector>(id, MyStringId.GetOrCompute(title), MyStringId.GetOrCompute(toolTip));
-            IMyTerminalControlCheckbox control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyProjector>(id);
-            control.Title = MyStringId.GetOrCompute(title);
-            control.Tooltip = MyStringId.GetOrCompute(toolTip);
-            IMyTerminalValueControl<bool> valueControl = control;
-			valueControl.Getter = block => GetOptionTerminal(block, opt);
-			valueControl.Setter = (block, value) => SetOptionTerminal(block, opt, value);
-			if (Static.TermControls.Count == 0)
-                MyAPIGateway.TerminalControls.AddControl<IMyTerminalControlCheckbox>(control);
-			Static.TermControls.Add(control);
-		}
-
-		private static void AddOffsetSlider(string id, string title, string toolTip, int dim)
-		{
-            //MyTerminalControlSlider<MySpaceProjector> control = new MyTerminalControlSlider<MySpaceProjector>(id, MyStringId.GetOrCompute(title), MyStringId.GetOrCompute(toolTip));
-            IMyTerminalControlSlider control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyProjector>(id);
-			Func<IMyTerminalBlock, float> getter = block => GetOffset(block, dim);
-            /*control.DefaultValue = dim == 1 ? 2.5f : 0f;
-			control.Normalizer = (block, value) => Normalizer(MinOffset, MaxOffset, block, value);
-			control.Denormalizer = (block, value) => Denormalizer(MinOffset, MaxOffset, block, value);*/
-            control.SetLimits(MinOffset, MaxOffset);
-			control.Writer = (block, sb) => WriterMetres(getter, block, sb);
-			IMyTerminalValueControl<float> valueControl = control;
-			valueControl.Getter = getter;
-			valueControl.Setter = (block, value) => SetOffset(block, dim, value);
-			Static.TermControls_Offset.Add(control);
-		}
-
-		private static void CustomControlGetter(IMyTerminalBlock block, List<IMyTerminalControl> controls)
-		{
-			if (GetOptionTerminal(block, Option.OnOff))
-			{
-				// find show on hud
-				int indexSOH = 0;
-				for (; indexSOH < controls.Count && controls[indexSOH].Id != "ShowOnHUD"; indexSOH++) ;
-				// remove all controls after ShowOnHUD and before separator
-				controls.RemoveRange(indexSOH + 1, controls.Count - indexSOH - 3);
-
-				bool showOffset = GetOptionTerminal(block, Option.ShowOffset);
-
-				for (int index = 1; index < Static.TermControls.Count; index++)
-				{
-					controls.Add(Static.TermControls[index]);
-					if (showOffset && Static.TermControls[index].Id == "HD_ShowOffset")
-					{
-						showOffset = false;
-						foreach (var offset in Static.TermControls_Offset)
-							controls.Add(offset);
-					}
-				}
-
-				if (GetOptionTerminal(block, Option.IntegrityColours))
-					foreach (var colour in Static.TermControls_Colours)
-						controls.Add(colour);
-			}
-		}
-
-		private static bool GetOptionTerminal(IMyTerminalBlock block, Option opt)
-		{
-			Projector proj;
-			if (!Registrar.TryGetValue(block, out proj))
-				return false;
-
-			return (proj.m_options.Value & opt) != 0;
-		}
-
-		private static void SetOptionTerminal(IMyTerminalBlock block, Option opt, bool value)
-		{
-			Projector proj;
-			if (!Registrar.TryGetValue(block, out proj))
-				return;
-
-			if (value)
-				proj.m_options.Value |= opt;
-			else
-				proj.m_options.Value &= ~opt;
-
-			if (opt == Option.OnOff || opt == Option.ShowOffset || opt == Option.IntegrityColours)
-				block.SwitchTerminalTo();
-		}
-
-		private static float GetRangeDetection(IMyTerminalBlock block)
-		{
-			Projector proj;
-			if (!Registrar.TryGetValue(block, out proj))
-				return 0f;
-
-			return proj.m_rangeDetection.Value;
-		}
-
-		private static void SetRangeDetection(IMyTerminalBlock block, float value)
-		{
-			Projector proj;
-			if (!Registrar.TryGetValue(block, out proj))
-				return;
-
-			proj.m_rangeDetection.Value = value;
-		}
-
-		private static float GetRadiusHolo(IMyTerminalBlock block)
-		{
-			Projector proj;
-			if (!Registrar.TryGetValue(block, out proj))
-				return 0f;
-
-			return proj.m_radiusHolo.Value;
-		}
-
-		private static void SetRadiusHolo(IMyTerminalBlock block, float value)
-		{
-			Projector proj;
-			if (!Registrar.TryGetValue(block, out proj))
-				return;
-
-			proj.m_radiusHolo.Value = value;
-		}
-
-		private static float GetSizeScale(IMyTerminalBlock block)
-		{
-			Projector proj;
-			if (!Registrar.TryGetValue(block, out proj))
-				return 0f;
-
-			return proj.m_sizeDistScale.Value;
-		}
-
-		private static void SetSizeScale(IMyTerminalBlock block, float value)
-		{
-			Projector proj;
-			if (!Registrar.TryGetValue(block, out proj))
-				return;
-
-			proj.m_sizeDistScale.Value = value;
-		}
-
-		private static float GetOffset(IMyTerminalBlock block, int dim)
-		{
-			Projector proj;
-			if (!Registrar.TryGetValue(block, out proj))
-				return 0f;
-
-			return proj.m_offset_ev.Value.GetDim(dim);
-		}
-
-		private static void SetOffset(IMyTerminalBlock block, int dim, float value)
-		{
-			Projector proj;
-			if (!Registrar.TryGetValue(block, out proj))
-				return;
-
-			Vector3 offset = proj.m_offset_ev.Value;//.SetDim(dim, value);
-			offset.SetDim(dim, value);
-			proj.m_offset_ev.Value = offset;
-		}
-
-		private static float Normalizer(float min, float max, IMyTerminalBlock block, float value)
-		{
-			return (value - min) / (max - min);
-		}
-
-		private static float Denormalizer(float min, float max, IMyTerminalBlock block, float value)
-		{
-			return min + value * (max - min);
-		}
-
-		private static void WriterMetres(Func<IMyTerminalBlock, float> Getter, IMyTerminalBlock block, StringBuilder stringBuilder)
-		{
-			stringBuilder.Append(PrettySI.makePretty(Getter(block)));
-			stringBuilder.Append("m");
-		}
-
-		private static void UpdateVisual()
-		{
-			foreach (var control in Static.TermControls)
-				control.UpdateVisual();
-		}
-
-		#endregion Terminal Controls
 
 		private static void AfterDamageHandler(object obj, MyDamageInformation damageInfo)
 		{
@@ -505,14 +414,14 @@ namespace Rynchodon.AntennaRelay
 		/// </summary>
 		private static void ColourBlock(IMySlimBlock realBlock, IMyCubeGrid holoGrid)
 		{
-			Static.logger.debugLog("realBlock == null", Logger.severity.FATAL, condition: realBlock == null);
+			Logger.DebugLog("realBlock == null", Logger.severity.FATAL, condition: realBlock == null);
 
 			float integrityRatio = (realBlock.BuildIntegrity - realBlock.CurrentDamage) / realBlock.MaxIntegrity;
 			float criticalRatio = ((MyCubeBlockDefinition)realBlock.BlockDefinition).CriticalIntegrityRatio;
 
 			float scaledRatio;
 			Color blockColour;
-			Static.logger.debugLog("integrityRatio: " + integrityRatio + ", criticalRatio: " + criticalRatio + ", fatblock: " + realBlock.FatBlock.getBestName() + ", functional: " + (realBlock.FatBlock != null && realBlock.FatBlock.IsFunctional), condition: integrityRatio != 1f);
+			Logger.DebugLog("integrityRatio: " + integrityRatio + ", criticalRatio: " + criticalRatio + ", fatblock: " + realBlock.FatBlock.getBestName() + ", functional: " + (realBlock.FatBlock != null && realBlock.FatBlock.IsFunctional), condition: integrityRatio != 1f);
 			if (integrityRatio > criticalRatio && (realBlock.FatBlock == null || realBlock.FatBlock.IsFunctional))
 			{
 				scaledRatio = (integrityRatio - criticalRatio) / (1f - criticalRatio);
@@ -532,7 +441,7 @@ namespace Rynchodon.AntennaRelay
 		private static void UpdateBlockModel(IMySlimBlock realBlock, IMyCubeGrid holoGrid)
 		{
 			IMySlimBlock holoBlock = holoGrid.GetCubeBlock(realBlock.Position);
-			Static.logger.debugLog("holoBlock == null", Logger.severity.FATAL, condition: holoBlock == null);
+			Logger.DebugLog("holoBlock == null", Logger.severity.FATAL, condition: holoBlock == null);
 
 			float realIntegrityRatio = (realBlock.BuildIntegrity - realBlock.CurrentDamage) / realBlock.MaxIntegrity;
 			float holoIntegrityRatio = (holoBlock.BuildIntegrity - holoBlock.CurrentDamage) / holoBlock.MaxIntegrity;
@@ -566,49 +475,44 @@ namespace Rynchodon.AntennaRelay
 			}
 		}
 
-		private readonly Logger m_logger;
-		private readonly IMyCubeBlock m_block;
+		private readonly IMyProjector m_block;
 		private readonly RelayClient m_netClient;
 
 		private readonly Dictionary<long, SeenHolo> m_holoEntities = new Dictionary<long, SeenHolo>();
 		/// <summary>List of entities to remove holo entirely, it will have to be re-created to be displayed again</summary>
 		private readonly List<long> m_holoEntitiesRemove = new List<long>();
 
-		private EntityValue<Option> m_options;
+		private Option m_options;
 		/// <summary>How close a detected entity needs to be to be placed inside the holographic area.</summary>
-		private EntityValue<float> m_rangeDetection;
+		private float m_rangeDetection;
 		/// <summary>Maximum radius of holographic area, holo entities should fit inside a sphere of this size.</summary>
-		private EntityValue<float> m_radiusHolo;
+		private float m_radiusHolo;
 		/// <summary>Size scale is distance scale * m_sizeDistScale</summary>
-		private EntityValue<float> m_sizeDistScale;
+		private float m_sizeDistScale;
 		/// <summary>Id of the real entity that is centred</summary>
-		private EntityValue<long> m_centreEntityId;
-		private EntityValue<Vector3> m_offset_ev;
+		private long m_centreEntityId;
+		private Vector3 m_offset_ev;
 
 		private DateTime m_clearAllAt = DateTime.UtcNow + Static.keepInCache;
 		/// <summary>The real entity that is centred</summary>
 		private IMyEntity value_centreEntity;
 		private bool m_playerCanSee;
 
-		private bool Enabled { get { return m_block.IsWorking && (m_options.Value & Option.OnOff) != 0; } }
+		private bool Enabled { get { return m_block.IsWorking && (m_options & Option.OnOff) != 0; } }
 
 		private IMyEntity m_centreEntity { get { return value_centreEntity ?? m_block; } }
 
-		private PositionBlock m_offset { get { return m_offset_ev.Value; } }
+		private PositionBlock m_offset { get { return m_offset_ev; } }
+
+		private Logable Log { get { return new Logable(m_block); } }
 
 		public Projector(IMyCubeBlock block)
 		{
-			this.m_logger = new Logger(block);
-			this.m_block = block;
-			this.m_netClient = new RelayClient(block);
+			if (Static == null)
+				throw new Exception("StaticVariables not loaded");
 
-			byte index = 0;
-			this.m_options = new EntityValue<Option>(block, index++, UpdateVisual);
-			this.m_rangeDetection = new EntityValue<float>(block, index++, UpdateVisual, DefaultRangeDetection);
-			this.m_radiusHolo = new EntityValue<float>(block, index++, UpdateVisual, DefaultRadiusHolo);
-			this.m_sizeDistScale = new EntityValue<float>(block, index++, UpdateVisual, DefaultSizeScale);
-			this.m_centreEntityId = new EntityValue<long>(block, index++, m_centreEntityId_AfterValueChanged);
-			this.m_offset_ev = new EntityValue<Vector3>(block, index++, UpdateVisual, new Vector3(0f, 2.5f, 0f));
+			this.m_block = (IMyProjector)block;
+			this.m_netClient = new RelayClient(block);
 
 			Registrar.Add(block, this);
 		}
@@ -620,10 +524,10 @@ namespace Rynchodon.AntennaRelay
 		{
 			if (m_holoEntities.Count != 0 && DateTime.UtcNow >= m_clearAllAt)
 			{
-				m_logger.debugLog("clearing all holo entities");
+				Log.DebugLog("clearing all holo entities");
 				foreach (SeenHolo sh in m_holoEntities.Values)
 				{
-					m_logger.debugLog("removing " + sh.Seen.Entity.EntityId + "from m_holoEntities (clear all)");
+					Log.DebugLog("removing " + sh.Seen.Entity.EntityId + "from m_holoEntities (clear all)");
 					OnRemove(sh);
 				}
 				m_holoEntities.Clear();
@@ -643,7 +547,7 @@ namespace Rynchodon.AntennaRelay
 				MyEntity[] ignore = new MyEntity[] { (MyEntity)MyAPIGateway.Session.Player.Controller.ControlledEntity };
 				foreach (Vector3 vector in Static.Directions)
 				{
-					LineD ray = new LineD(playerPos, holoCentre + vector * m_radiusHolo.Value);
+					LineD ray = new LineD(playerPos, holoCentre + vector * m_radiusHolo);
 					MyGamePruningStructure.GetTopmostEntitiesOverlappingRay(ref ray, entitiesInRay);
 					if (!RayCast.Obstructed(ray, entitiesInRay.Select(overlap => overlap.Element), ignore))
 					{
@@ -677,11 +581,11 @@ namespace Rynchodon.AntennaRelay
 				{
 					if (!sh.Holo.Render.Visible)
 					{
-						m_logger.debugLog("showing holo: " + sh.Seen.Entity.getBestName());
+						Log.DebugLog("showing holo: " + sh.Seen.Entity.getBestName());
 						SetupProjection(sh.Holo);
 						SetVisible(sh.Holo, true);
 					}
-					if (sh.Seen.Entity is MyCubeGrid && sh.ColouredByIntegrity != ((m_options.Value & Option.IntegrityColours) != 0))
+					if (sh.Seen.Entity is MyCubeGrid && sh.ColouredByIntegrity != ((m_options & Option.IntegrityColours) != 0))
 					{
 						if (sh.ColouredByIntegrity)
 							RestoreColour(sh);
@@ -691,7 +595,7 @@ namespace Rynchodon.AntennaRelay
 				}
 				else if (sh.Holo.Render.Visible)
 				{
-					m_logger.debugLog("hiding holo: " + sh.Seen.Entity.getBestName());
+					Log.DebugLog("hiding holo: " + sh.Seen.Entity.getBestName());
 					SetVisible(sh.Holo, false);
 				}
 			}
@@ -700,12 +604,12 @@ namespace Rynchodon.AntennaRelay
 			{
 				foreach (long entityId in m_holoEntitiesRemove)
 				{
-					m_logger.debugLog("removing " + entityId + "from m_holoEntities");
+					Log.DebugLog("removing " + entityId + "from m_holoEntities");
 					SeenHolo sh;
 					if (!m_holoEntities.TryGetValue(entityId, out sh))
 					{
 						// this may be normal
-						m_logger.debugLog("not in m_holoEntities: " + entityId, Logger.severity.WARNING);
+						Log.DebugLog("not in m_holoEntities: " + entityId, Logger.severity.WARNING);
 						continue;
 					}
 					OnRemove(sh);
@@ -725,27 +629,25 @@ namespace Rynchodon.AntennaRelay
 				foreach (SeenHolo sh in m_holoEntities.Values)
 					if (sh.Holo.Render.Visible)
 					{
-						m_logger.debugLog("hiding holo: " + sh.Seen.Entity.getBestName());
+						Log.DebugLog("hiding holo: " + sh.Seen.Entity.getBestName());
 						SetVisible(sh.Holo, false);
 					}
 				return;
 			}
 
-            
-           //if (MyGuiScreenTerminal.GetCurrentScreen() == MyTerminalPageEnum.None && MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter && Static.MouseControls)
-          if (MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter && Static.MouseControls)
+			if (MyGuiScreenTerminal.GetCurrentScreen() == MyTerminalPageEnum.None && MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter && Static.MouseControls)
 				CheckInput();
 
 			PositionWorld projectionCentre = m_offset.ToWorld(m_block);
 
-			float distanceScale = m_radiusHolo.Value / m_rangeDetection.Value;
-			float sizeScale = distanceScale * m_sizeDistScale.Value;
+			float distanceScale = m_radiusHolo / m_rangeDetection;
+			float sizeScale = distanceScale * m_sizeDistScale;
 
 			foreach (SeenHolo sh in m_holoEntities.Values)
 			{
 				MatrixD worldMatrix = sh.Seen.Entity.WorldMatrix;
 				worldMatrix.Translation = projectionCentre + (sh.Seen.Entity.GetPosition() - m_centreEntity.GetPosition()) * distanceScale + (sh.Seen.Entity.GetPosition() - sh.Seen.Entity.GetCentre()) * (sizeScale - distanceScale);
-				m_logger.debugLog("entity: " + sh.Seen.Entity.getBestName() + "(" + sh.Seen.Entity.EntityId + "), centre: " + projectionCentre + ", offset: " + (worldMatrix.Translation - projectionCentre) + ", position: " + worldMatrix.Translation);
+				Log.DebugLog("entity: " + sh.Seen.Entity.getBestName() + "(" + sh.Seen.Entity.EntityId + "), centre: " + projectionCentre + ", offset: " + (worldMatrix.Translation - projectionCentre) + ", position: " + worldMatrix.Translation);
 				sh.Holo.PositionComp.SetWorldMatrix(worldMatrix);
 				sh.Holo.PositionComp.Scale = sizeScale;
 			}
@@ -755,7 +657,7 @@ namespace Rynchodon.AntennaRelay
 				MatrixD sphereMatrix = m_block.WorldMatrix;
 				sphereMatrix.Translation = projectionCentre;
 				Color c = Color.Yellow;
-				MySimpleObjectDraw.DrawTransparentSphere(ref sphereMatrix, m_radiusHolo.Value, ref c, MySimpleObjectRasterizer.Wireframe, 8);
+				MySimpleObjectDraw.DrawTransparentSphere(ref sphereMatrix, m_radiusHolo, ref c, MySimpleObjectRasterizer.Wireframe, 8);
 			}
 		}
 
@@ -764,7 +666,7 @@ namespace Rynchodon.AntennaRelay
 			MatrixD headMatrix = MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true);
 			RayD ray = new RayD(headMatrix.Translation, headMatrix.Forward);
 
-			BoundingSphereD holoSphere = new BoundingSphereD(m_offset.ToWorld(m_block), m_radiusHolo.Value);
+			BoundingSphereD holoSphere = new BoundingSphereD(m_offset.ToWorld(m_block), m_radiusHolo);
 			double tmin, tmax;
 
 			if (!holoSphere.IntersectRaySphere(ray, out tmin, out tmax) || tmin > CrosshairRange)
@@ -785,12 +687,12 @@ namespace Rynchodon.AntennaRelay
 					rangeMulti /= ScrollRangeMulti;
 					scrollSteps++;
 				}
-				m_rangeDetection.Value *= rangeMulti;
+				m_rangeDetection *= rangeMulti;
 			}
 
 			if (MyAPIGateway.Input.IsNewRightMousePressed())
 			{
-				m_centreEntityId.Value = 0L;
+				m_centreEntityId = 0L;
 			}
 			else if (MyAPIGateway.Input.IsNewLeftMousePressed())
 			{
@@ -805,7 +707,7 @@ namespace Rynchodon.AntennaRelay
 					}
 
 				if (firstHit != null)
-					m_centreEntityId.Value = firstHit.EntityId;
+					m_centreEntityId = firstHit.EntityId;
 			}
 		}
 
@@ -822,13 +724,13 @@ namespace Rynchodon.AntennaRelay
 				return false;
 			}
 
-			float rangeDetection = m_rangeDetection.Value; rangeDetection *= rangeDetection;
+			float rangeDetection = m_rangeDetection; rangeDetection *= rangeDetection;
 			return Vector3D.DistanceSquared(m_centreEntity.GetPosition(), seen.Entity.GetCentre()) <= rangeDetection;
 		}
 
 		private bool CheckRelations(IMyEntity entity)
 		{
-			return entity == m_block.CubeGrid ? (m_options.Value & Option.ThisShip) != 0 : (m_options.Value & (Option)m_block.getRelationsTo(entity)) != 0;
+			return entity == m_block.CubeGrid ? (m_options & Option.ThisShip) != 0 : (m_options & (Option)m_block.getRelationsTo(entity)) != 0;
 		}
 
 		private void CreateHolo(LastSeen seen)
@@ -868,7 +770,7 @@ namespace Rynchodon.AntennaRelay
 			MyAPIGateway.Entities.AddEntity(holo);
 			Profiler.EndProfileBlock();
 
-			m_logger.debugLog("created holo for " + seen.Entity.nameWithId() + ", holo: " + holo.nameWithId());
+			Log.DebugLog("created holo for " + seen.Entity.nameWithId() + ", holo: " + holo.nameWithId());
 			m_holoEntities.Add(seen.Entity.EntityId, new SeenHolo() { Seen = seen, Holo = holo });
 
 			MyCubeGrid actual = (MyCubeGrid)seen.Entity;
@@ -897,7 +799,7 @@ namespace Rynchodon.AntennaRelay
 			SeenHolo sh;
 			if (!m_holoEntities.TryGetValue(obj.CubeGrid.EntityId, out sh))
 			{
-				m_logger.debugLog("failed lookup of grid: " + obj.CubeGrid.DisplayName, Logger.severity.ERROR);
+				Log.DebugLog("failed lookup of grid: " + obj.CubeGrid.DisplayName, Logger.severity.ERROR);
 				obj.CubeGrid.OnBlockAdded -= Actual_OnBlockAdded;
 				obj.CubeGrid.OnBlockRemoved -= Actual_OnBlockRemoved;
 				return;
@@ -918,7 +820,7 @@ namespace Rynchodon.AntennaRelay
 			SeenHolo sh;
 			if (!m_holoEntities.TryGetValue(obj.CubeGrid.EntityId, out sh))
 			{
-				m_logger.debugLog("failed lookup of grid: " + obj.CubeGrid.DisplayName, Logger.severity.ERROR);
+				Log.DebugLog("failed lookup of grid: " + obj.CubeGrid.DisplayName, Logger.severity.ERROR);
 				obj.CubeGrid.OnBlockAdded -= Actual_OnBlockAdded;
 				obj.CubeGrid.OnBlockRemoved -= Actual_OnBlockRemoved;
 				return;
@@ -943,7 +845,7 @@ namespace Rynchodon.AntennaRelay
 
 		private void ColourByIntegrity(SeenHolo sh)
 		{
-			m_logger.debugLog("colouring by integriy: " + sh.Seen.Entity.getBestName());
+			Log.DebugLog("colouring by integriy: " + sh.Seen.Entity.getBestName());
 			MyCubeGrid realGrid = (MyCubeGrid)sh.Seen.Entity;
 			IMyCubeGrid holoGrid = (IMyCubeGrid)sh.Holo;
 			foreach (IMySlimBlock block in realGrid.CubeBlocks)
@@ -953,11 +855,11 @@ namespace Rynchodon.AntennaRelay
 
 		private void RestoreColour(SeenHolo sh)
 		{
-			m_logger.debugLog("restoring original colour: " + sh.Seen.Entity.getBestName());
+			Log.DebugLog("restoring original colour: " + sh.Seen.Entity.getBestName());
 			MyCubeGrid realGrid = (MyCubeGrid)sh.Seen.Entity;
 			MyCubeGrid holo = (MyCubeGrid)sh.Holo;
 			foreach (IMySlimBlock block in realGrid.CubeBlocks)
-				holo.ColorBlocks(block.Position, block.Position, block.GetColorMask(), false);
+				holo.ColorBlocks(block.Position, block.Position, block.GetColorMask(), false, true);
 			sh.ColouredByIntegrity = false;
 		}
 
@@ -966,7 +868,7 @@ namespace Rynchodon.AntennaRelay
 			SeenHolo sh;
 			if (!m_holoEntities.TryGetValue(block.CubeGrid.EntityId, out sh))
 			{
-				m_logger.debugLog("grid entity id lookup failed", Logger.severity.ERROR);
+				Log.DebugLog("grid entity id lookup failed", Logger.severity.ERROR);
 				((MyCubeGrid)block.CubeGrid).OnBlockIntegrityChanged -= OnBlockIntegrityChanged;
 				return;
 			}
@@ -978,17 +880,22 @@ namespace Rynchodon.AntennaRelay
 
 		private void m_centreEntityId_AfterValueChanged()
 		{
-			long entityId = m_centreEntityId.Value;
+			long entityId = m_centreEntityId;
 			if (entityId == 0L)
 			{
 				value_centreEntity = null;
 			}
 			else if (!MyAPIGateway.Entities.TryGetEntityById(entityId, out value_centreEntity))
 			{
-				m_logger.alwaysLog("Failed to get entity for id: " + entityId, Logger.severity.WARNING);
+				Log.AlwaysLog("Failed to get entity for id: " + entityId, Logger.severity.WARNING);
 				value_centreEntity = null;
 			}
-			m_logger.debugLog("centre entity is now " + m_centreEntity.getBestName() + "(" + entityId + ")");
+			Log.DebugLog("centre entity is now " + m_centreEntity.getBestName() + "(" + entityId + ")");
+		}
+
+		private bool GetOption(Option opt)
+		{
+			return (m_options & opt) == opt;
 		}
 
 	}

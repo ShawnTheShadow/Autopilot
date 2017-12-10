@@ -1,4 +1,5 @@
 using System;
+using Rynchodon.Utility;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
@@ -29,8 +30,6 @@ namespace Rynchodon.Autopilot.Data
 	/// </summary>
 	public class PseudoBlock
 	{
-
-		protected readonly Logger m_logger;
 		private readonly Func<IMyCubeGrid> m_grid;
 		private ulong m_lastCalc_worldMatrix;
 		private MatrixD value_worldMatrix;
@@ -43,11 +42,16 @@ namespace Rynchodon.Autopilot.Data
 
 		public IMyCubeGrid Grid { get { return m_grid.Invoke(); } }
 
+		public virtual string DisplayName
+		{ get { return Block != null ? Block.getBestName() : "Pseudo: " + LocalPosition.ToString(); } }
+
+		protected Logable Log { get { return LogableFrom.Pseudo(this); } }
+
 		public MatrixD WorldMatrix
 		{
 			get
 			{
-				m_logger.debugLog("Grid == null", Logger.severity.FATAL, condition: Grid == null);
+				Log.DebugLog("Grid == null", Logger.severity.FATAL, condition: Grid == null);
 
 				if (m_lastCalc_worldMatrix != Globals.UpdateCount)
 				{
@@ -63,7 +67,6 @@ namespace Rynchodon.Autopilot.Data
 		/// </summary>
 		public PseudoBlock(IMyCubeBlock block)
 		{
-			this.m_logger = new Logger(block);
 			this.LocalMatrix = block.LocalMatrix;
 			this.m_grid = () => block.CubeGrid;
 			this.Block = block;
@@ -74,7 +77,6 @@ namespace Rynchodon.Autopilot.Data
 		/// </summary>
 		protected PseudoBlock(Func<IMyCubeGrid> grid)
 		{
-			this.m_logger = new Logger(() => grid.Invoke().DisplayName);
 			this.m_grid = grid;
 		}
 
@@ -83,7 +85,6 @@ namespace Rynchodon.Autopilot.Data
 		/// </summary>
 		public PseudoBlock(Func<IMyCubeGrid> grid, Matrix local)
 		{
-			this.m_logger = new Logger(() => grid.Invoke().DisplayName);
 			this.LocalMatrix = local;
 			this.m_grid = grid;
 		}
@@ -103,7 +104,7 @@ namespace Rynchodon.Autopilot.Data
 
 			if (for2 == up2 || for2 == Base6Directions.GetFlippedDirection(up2))
 			{
-				m_logger.debugLog("incompatible directions, for2: " + for2 + ", up2: " + up2);
+				Log.DebugLog("incompatible directions, for2: " + for2 + ", up2: " + up2);
 				up2 = Base6Directions.GetPerpendicular(for2);
 			}
 
@@ -134,7 +135,7 @@ namespace Rynchodon.Autopilot.Data
 		{
 			if (forward == up || forward == Base6Directions.GetFlippedDirection(up))
 			{
-				m_logger.alwaysLog("incompatible directions, for2: " + forward + ", up2: " + up, Logger.severity.FATAL);
+				Log.AlwaysLog("incompatible directions, for2: " + forward + ", up2: " + up, Logger.severity.FATAL);
 				throw new ArgumentException("forward is not perpendicular to up");
 			}
 
@@ -156,6 +157,8 @@ namespace Rynchodon.Autopilot.Data
 	{
 
 		public int FunctionalBlocks { get; private set; }
+
+		public override string DisplayName { get { return "Multi: " + typeof(T).Name; } }
 
 		/// <summary>
 		/// Creates a MultiBlock from a single block. However, if the block closes, will rebuild with all the blocks of type T.
@@ -184,11 +187,11 @@ namespace Rynchodon.Autopilot.Data
 
 			try
 			{
-				m_logger.debugLog("Closed block: " + obj.getBestName());
+				Log.DebugLog("Closed block: " + obj.getBestName());
 				calculateLocalMatrix();
 			}
 			catch (Exception ex)
-			{ m_logger.debugLog("Exception: " + ex); }
+			{ Log.DebugLog("Exception: " + ex); }
 		}
 
 		private void calculateLocalMatrix()
@@ -196,13 +199,15 @@ namespace Rynchodon.Autopilot.Data
 			if (Grid.MarkedForClose)
 				return;
 
-			var blocksOfT = CubeGridCache.GetFor(Grid).GetBlocksOfType(typeof(T));
+			CubeGridCache cache = CubeGridCache.GetFor(Grid);
+			if (cache == null)
+				return;
 			Block = null;
 
 			FunctionalBlocks = 0;
 			Matrix LocalMatrix = Matrix.Zero;
 			Vector3 Translation = Vector3.Zero;
-			foreach (IMyCubeBlock block in blocksOfT)
+			foreach (IMyCubeBlock block in  cache.BlocksOfType(typeof(T)))
 			{
 				if (Block == null)
 				{

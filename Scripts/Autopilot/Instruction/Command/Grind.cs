@@ -44,17 +44,12 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			}
 		}
 
-		public override void AddControls(List<IMyTerminalControl> controls)
+		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-            IMyTerminalControlSlider radius = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyShipController>("Radius");
-            radius.Title = MyStringId.GetOrCompute("Radius");
-            radius.Tooltip = MyStringId.GetOrCompute(AddDescription);
-            
-             
-            //ToFix these values
-			//radius.DefaultValue = 100f;
-			//radius.Normalizer = Normalizer;
-			//radius.Denormalizer = Denormalizer;
+			MyTerminalControlSlider<MyShipController> radius = new MyTerminalControlSlider<MyShipController>("Radius", MyStringId.GetOrCompute("Radius"), MyStringId.GetOrCompute(AddDescription));
+			radius.DefaultValue = 100f;
+			radius.Normalizer = Normalizer;
+			radius.Denormalizer = Denormalizer;
 			radius.Writer = (block, sb) => {
 				sb.Append(PrettySI.makePretty(m_radius));
 				sb.Append('m');
@@ -65,7 +60,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			controls.Add(radius);
 		}
 
-		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			if (!PrettySI.TryParse(command, out m_radius))
 			{

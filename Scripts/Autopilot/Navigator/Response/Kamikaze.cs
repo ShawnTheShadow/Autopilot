@@ -1,8 +1,8 @@
 using System.Text;
 using Rynchodon.AntennaRelay;
 using Rynchodon.Autopilot.Data;
-using Rynchodon.Autopilot.Movement;
-using Rynchodon.Utility.Vectors;
+using Rynchodon.Autopilot.Pathfinding;
+using Rynchodon.Utility;
 using Rynchodon.Weapons;
 using VRage.Game.ModAPI;
 using VRageMath;
@@ -11,19 +11,12 @@ namespace Rynchodon.Autopilot.Navigator
 {
 	public class Kamikaze : NavigatorMover, IEnemyResponse
 	{
-
-		private readonly Logger m_logger;
-
 		private LastSeen m_enemy;
 		private bool m_approaching;
 
-		public Kamikaze(Mover mover, AllNavigationSettings navSet)
-			: base(mover)
-		{
-			this.m_logger = new Logger(() => m_controlBlock.CubeGrid.DisplayName);
+		private Logable Log { get { return new Logable(m_controlBlock.CubeGrid); } }
 
-			m_logger.debugLog("Initialized");
-		}
+		public Kamikaze(Pathfinder pathfinder, AllNavigationSettings navSet) : base(pathfinder) { }
 
 		#region IEnemyResponse Members
 
@@ -40,14 +33,14 @@ namespace Rynchodon.Autopilot.Navigator
 		public void UpdateTarget(LastSeen enemy)
 		{
 			m_enemy = enemy;
-			m_navSet.Settings_Task_NavEngage.DestinationEntity = enemy.Entity;
+			m_navSet.Settings_Task_NavEngage.DestinationEntity = enemy?.Entity;
 		}
 
 		#endregion
 
 		public override void Move()
 		{
-			m_logger.debugLog("entered");
+			//Log.DebugLog("entered");
 
 			if (m_enemy == null)
 			{
@@ -59,22 +52,27 @@ namespace Rynchodon.Autopilot.Navigator
 			m_approaching = m_mover.SignificantGravity() && !m_navSet.DistanceLessThan(3000f);
 			if (m_approaching)
 			{
-				m_mover.CalcMove(m_mover.Block.Pseudo, m_enemy.GetPosition(), m_enemy.GetLinearVelocity());
+				m_pathfinder.MoveTo(m_enemy);
 				return;
 			}
 
+			float myAccel = m_mover.Thrust.GetForceInDirection(Base6Directions.GetClosestDirection(m_mover.Thrust.Standard.LocalMatrix.Forward)) * Movement.Mover.AvailableForceRatio / m_controlBlock.Physics.Mass;
+
 			Vector3D enemyPosition = m_enemy.GetPosition();
-			float myAccel = m_mover.Thrust.GetForceInDirection(Base6Directions.GetClosestDirection(m_mover.Thrust.Standard.LocalMatrix.Forward)) / m_controlBlock.Physics.Mass;
 			Vector3 aimDirection;
 			Vector3D contactPoint;
 			TargetingBase.FindInterceptVector(m_controlBlock.Pseudo.WorldPosition, m_controlBlock.Physics.LinearVelocity, enemyPosition, m_enemy.GetLinearVelocity(), myAccel, true, out aimDirection, out contactPoint);
+			Vector3 aimVelo; Vector3.Multiply(ref aimDirection, myAccel, out aimVelo);
 
-			m_mover.SetMove(m_controlBlock.Pseudo, contactPoint, ((DirectionWorld)(aimDirection * myAccel)).ToBlock(m_mover.Block.CubeBlock));
+			Vector3 linearVelocity = m_controlBlock.Physics.LinearVelocity;
+			Vector3 addToVelocity; Vector3.Add(ref linearVelocity, ref aimVelo, out addToVelocity);
+
+			m_pathfinder.MoveTo(m_enemy, addToVelocity: addToVelocity);
 		}
 
 		public void Rotate()
 		{
-			m_logger.debugLog("entered");
+			//Log.DebugLog("entered");
 
 			if (m_enemy == null)
 			{
@@ -84,13 +82,21 @@ namespace Rynchodon.Autopilot.Navigator
 
 			if (m_approaching)
 			{
-				m_logger.debugLog("approaching");
+				//Log.DebugLog("approaching");
 				m_mover.CalcRotate();
 			}
 			else
 			{
-				m_logger.debugLog("ramming");
-				m_mover.CalcRotate_Accel();
+				//Log.DebugLog("ramming");
+				if (m_navSet.DistanceLessThan(100f))
+				{
+					// just before impact, face the target
+					Vector3 targetDirection = m_enemy.GetPosition() - m_controlBlock.CubeBlock.GetPosition();
+					targetDirection.Normalize();
+					m_mover.CalcRotate(m_mover.Thrust.Standard, RelativeDirection3F.FromWorld(m_mover.Block.CubeGrid, targetDirection));
+				}
+				else
+					m_mover.CalcRotate_Accel();
 			}
 		}
 

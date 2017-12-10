@@ -1,12 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Text;
-using Rynchodon.Autopilot.Movement;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using VRage.Utils;
 using VRageMath;
-using Sandbox.ModAPI;
-using Sandbox.ModAPI.Interfaces.Terminal;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
@@ -61,9 +58,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override sealed void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-            IMyTerminalControlTextbox blockName = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("BlockName");
-            blockName.Title = MyStringId.GetOrCompute("Block Name");
-            blockName.Tooltip = MyStringId.GetOrCompute(AddDescription);
+			MyTerminalControlTextbox<MyShipController> blockName = new MyTerminalControlTextbox<MyShipController>("BlockName", MyStringId.GetOrCompute("Block Name"), MyStringId.GetOrCompute(AddDescription));
 			blockName.Getter = block => m_searchBlockName;
 			blockName.Setter = (block, value) => m_searchBlockName = value;
 			controls.Add(blockName);
@@ -72,7 +67,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			controls.Add(m_upwardSelector.m_listBox);
 		}
 
-		protected override System.Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			string blockName;
 			Base6Directions.Direction? forward, upward;
@@ -108,7 +103,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			return result;
 		}
 
-		protected abstract void ActionMethod(Mover mover);
+		protected abstract void ActionMethod(Pathfinding.Pathfinder pathfinder);
 
 	}
 }

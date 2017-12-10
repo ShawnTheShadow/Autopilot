@@ -2,7 +2,6 @@
 using Rynchodon.Autopilot.Navigator;
 using Rynchodon.Settings;
 using Rynchodon.Utility.Vectors;
-using Sandbox.ModAPI;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRageMath;
@@ -30,14 +29,15 @@ namespace Rynchodon.Autopilot.Data
 			private InfoString.StringId m_complaint;
 			private BlockNameOrientation m_destBlock;
 			private IMyEntity m_destEntity;
+			private Func<IMyEntity, bool> m_ignoreEntity;
 
 			private TimeSpan? m_waitUntil;
 
 			private PositionBlock? m_destinationOffset;
 
-			private float? m_destRadius, m_distance, m_distanceAngle, m_speedTarget, m_speedMaxRelative;
+			private float? m_destRadius, m_distance, m_distanceAngle, m_speedTarget, m_speedMaxRelative, m_minDistToJump;
 
-			private bool? m_ignoreAsteroid, m_destChanged, m_pathfindeCanChangeCourse, m_formation, m_nearingDestination;
+			private bool? m_ignoreAsteroid, m_pathfindeCanChangeCourse, m_formation;
 
 			/// <summary>
 			/// Creates the top-level SettingLevel, which has defaults set.
@@ -55,12 +55,11 @@ namespace Rynchodon.Autopilot.Data
 				m_distanceAngle = float.NaN;
 				m_speedTarget = DefaultSpeed;
 				m_speedMaxRelative = float.MaxValue;
+				m_minDistToJump = 0f;
 
 				m_ignoreAsteroid = false;
-				m_destChanged = true;
 				m_pathfindeCanChangeCourse = true;
 				m_formation = false;
-				m_nearingDestination = false;
 			}
 
 			/// <summary>
@@ -124,7 +123,11 @@ namespace Rynchodon.Autopilot.Data
 						return m_navigatorMover;
 					return m_navigatorMover ?? parent.NavigatorMover;
 				}
-				set { m_navigatorMover = value; }
+				set
+				{
+					m_navigatorMover = value;
+					Logger.DebugLog("Nav Move: " + value);
+				}
 			}
 
 			/// <summary>
@@ -139,7 +142,11 @@ namespace Rynchodon.Autopilot.Data
 						return m_navigatorRotator;
 					return m_navigatorRotator ?? parent.NavigatorRotator;
 				}
-				set { m_navigatorRotator = value; }
+				set
+				{
+					m_navigatorRotator = value;
+					Logger.DebugLog("Nav Rotate: " + value);
+				}
 			}
 
 			/// <summary>
@@ -200,6 +207,28 @@ namespace Rynchodon.Autopilot.Data
 				set { m_destEntity = value; }
 			}
 
+			/// <summary>
+			/// Determines if pathfinder should ignore an entity.
+			/// </summary>
+			public Func<IMyEntity, bool> IgnoreEntity
+			{
+				private get
+				{
+					if (parent == null)
+						return m_ignoreEntity;
+					return m_ignoreEntity ?? parent.IgnoreEntity;
+				}
+				set { m_ignoreEntity = value; }
+			}
+
+			/// <summary>
+			/// For pathfinder to check if it should ignore an entity.
+			/// </summary>
+			public bool ShouldIgnoreEntity(IMyEntity entity)
+			{
+				return entity == DestinationEntity || IgnoreEntity.InvokeIfExists(entity);
+			}
+
 			/// <summary>How close the navigation block needs to be to the destination</summary>
 			public float DestinationRadius
 			{
@@ -207,8 +236,16 @@ namespace Rynchodon.Autopilot.Data
 				set { m_destRadius = value; }
 			}
 
+			public float DestinationRadiusSquared
+			{
+				get
+				{
+					float destRadius = DestinationRadius;
+					return destRadius * destRadius;
+				}
+			}
+
 			/// <summary>
-			/// <para>Will be NaN if Mover.Move() has not been called</para>
 			/// <para>Distance between current position and destination.</para>
 			/// </summary>
 			public float Distance
@@ -263,18 +300,17 @@ namespace Rynchodon.Autopilot.Data
 				set { m_speedMaxRelative = value; }
 			}
 
+			public float MinDistToJump
+			{
+				get { return m_minDistToJump ?? parent.MinDistToJump; }
+				set { m_minDistToJump = value; }
+			}
+
 			/// <summary>Pathfinder should not run voxel tests.</summary>
 			public bool IgnoreAsteroid
 			{
 				get { return m_ignoreAsteroid ?? parent.IgnoreAsteroid; }
 				set { m_ignoreAsteroid = value; }
-			}
-
-			/// <summary>Pathfinder uses this to track when OnTaskComplete_NavWay() is invoked.</summary>
-			public bool DestinationChanged
-			{
-				get { return m_destChanged ?? parent.DestinationChanged; }
-				set { m_destChanged = value; }
 			}
 
 			/// <summary>For final landing stage and "Line" command</summary>
@@ -289,13 +325,6 @@ namespace Rynchodon.Autopilot.Data
 			{
 				get { return m_formation ?? parent.Stay_In_Formation; }
 				set { m_formation = value; }
-			}
-
-			/// <summary>Mover uses this to determine if the ship should rotate to stop.</summary>
-			public bool NearingDestination
-			{
-				get { return m_nearingDestination ?? parent.NearingDestination; }
-				set { m_nearingDestination = value; }
 			}
 
 		}
@@ -349,6 +378,8 @@ namespace Rynchodon.Autopilot.Data
 
 		public int WelderUnfinishedBlocks { get; set; }
 
+		public event Action AfterTaskComplete;
+
 		public AllNavigationSettings(IMyCubeBlock defaultNavBlock)
 		{
 			this.defaultNavBlock = defaultNavBlock;
@@ -392,6 +423,7 @@ namespace Rynchodon.Autopilot.Data
 			if (Settings_Task_NavWay != null)
 				Settings_Task_NavWay.Dispose();
 			Settings_Task_NavWay = new SettingsLevel(Settings_Task_NavEngage);
+			AfterTaskComplete.InvokeIfExists();
 		}
 
 		public void OnTaskComplete(SettingsLevelName level)

@@ -1,14 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+using System.Reflection;
 using System.Text;
 using Rynchodon.Update;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using VRage.Input;
-using System.Diagnostics;
-using System.Reflection;
 
 namespace Rynchodon
 {
@@ -17,67 +15,55 @@ namespace Rynchodon
 
 		private class StaticVariables
 		{
-			public IMyTerminalBlock switchTo;
 			public MyKeys[] importantKeys = new MyKeys[] { MyKeys.Enter, MyKeys.Space };
 			public List<MyKeys> pressedKeys = new List<MyKeys>();
 		}
 
 		private static StaticVariables Static = new StaticVariables();
 
-		static IMyTerminalBlockExtensions()
-		{
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
-		}
-
-		private static void Entities_OnCloseAll()
-		{
-			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
-			Static = null;
-		}
-
 		public static void AppendCustomInfo(this IMyTerminalBlock block, string message)
 		{
 			Action<IMyTerminalBlock, StringBuilder> action = (termBlock, builder) => builder.Append(message);
 
 			block.AppendingCustomInfo += action;
-			block.RefreshCustomInfo();
+			block.UpdateCustomInfo();
 			block.AppendingCustomInfo -= action;
 		}
 
+		/// <summary>
+		/// Refresh custom info & raise properties changed.
+		/// </summary>
+		public static void UpdateCustomInfo(this IMyTerminalBlock block)
+		{
+			block.RefreshCustomInfo();
+			((MyTerminalBlock)block).RaisePropertiesChanged();
+		}
 
 		/// <summary>
-		/// Wait for input to finish, then switch control panel to the specified block.
+		/// Wait for input to finish, then switch control panel to the currently selected block(s).
 		/// </summary>
-		/// <param name="block">The block to switch to.</param>
-		public static void SwitchTerminalTo(this IMyTerminalBlock block, string caller = null)
+		/// <param name="block">Not used.</param>
+		public static void RebuildControls(this IMyTerminalBlock block)
 		{
-			if (Static == null)
+			if (Globals.WorldClosed)
 				return;
-            if (caller == null)
-            {
-                StackTrace stackTrace = new StackTrace();
-                StackFrame frame = stackTrace.GetFrame(1);
-                MethodBase method = frame.GetMethod();
-                caller = method.Name.Replace("set_", "");
-            }
-			//Logger.debugLog("IMyTerminalBlockExtensions", "block: " + block.getBestName());
-			Logger.DebugLog("null block from " + caller, Logger.severity.FATAL, condition: block == null);
+
+			if (MyAPIGateway.Gui.GetCurrentScreen != VRage.Game.ModAPI.MyTerminalPageEnum.ControlPanel)
+			{
+				Logger.DebugLog("Control panel not open");
+				return;
+			}
+
 			UpdateManager.Unregister(1, SwitchTerminalWhenNoInput);
 			UpdateManager.Register(1, SwitchTerminalWhenNoInput);
-			Static.switchTo = block;
-
-			//Static.pressedKeys.Clear();
-			//MyAPIGateway.Input.GetPressedKeys(Static.pressedKeys);
-			//Logger.DebugLog("IMyTerminalBlockExtensions", "pressed: " + string.Join(", ", Static.pressedKeys));
 		}
 
 		private static void SwitchTerminalWhenNoInput()
 		{
-			if (Static == null)
+			if (Globals.WorldClosed)
 				return;
 
 			Logger.DebugLog("MyAPIGateway.Input == null", Logger.severity.FATAL, condition: MyAPIGateway.Input == null);
-			Logger.DebugLog("switchTo == null", Logger.severity.FATAL, condition: Static.switchTo == null);
 
 			if (MyAPIGateway.Input.IsAnyMouseOrJoystickPressed())
 				return;
@@ -91,11 +77,23 @@ namespace Rynchodon
 						return;
 			}
 
-			//Logger.debugLog("IMyTerminalBlockExtensions", "switching to: " + switchTo.getBestName());
 			UpdateManager.Unregister(1, SwitchTerminalWhenNoInput);
-			MyGuiScreenTerminal.SwitchToControlPanelBlock((MyTerminalBlock)Static.switchTo);
-            
-			Static.switchTo = null;
+
+			Type type = typeof(MyGuiScreenTerminal);
+			object obj = type.GetField("m_instance", BindingFlags.Static | BindingFlags.NonPublic)?.GetValue(null);
+			Logger.DebugLog("m_instance not found", Logger.severity.ERROR, condition: obj == null);
+
+			obj = type.GetField("m_controllerControlPanel", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(obj);
+			Logger.DebugLog("m_controllerControlPanel not found", Logger.severity.ERROR, condition: obj == null);
+
+			type = type.Assembly.GetType("Sandbox.Game.Gui.MyTerminalControlPanel", true);
+			Logger.DebugLog("MyTerminalControlPanel not found", Logger.severity.ERROR, condition: type == null);
+
+			MethodInfo method = type.GetMethod("SelectBlocks", BindingFlags.Instance | BindingFlags.NonPublic);
+			if (method == null)
+				Logger.AlwaysLog("SelectBlocks not found", Logger.severity.ERROR);
+			else
+				method.Invoke(obj, null);
 		}
 
 	}

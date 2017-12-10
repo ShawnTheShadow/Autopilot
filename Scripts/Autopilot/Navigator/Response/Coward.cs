@@ -1,7 +1,8 @@
 using System.Text;
 using Rynchodon.AntennaRelay;
 using Rynchodon.Autopilot.Data;
-using Rynchodon.Autopilot.Movement;
+using Rynchodon.Autopilot.Pathfinding;
+using Rynchodon.Utility;
 using VRage.Game.ModAPI;
 using VRageMath;
 
@@ -12,17 +13,17 @@ namespace Rynchodon.Autopilot.Navigator
 	/// </summary>
 	public class Coward : NavigatorMover, IEnemyResponse
 	{
-
-		private readonly Logger m_logger;
-
 		private LastSeen m_enemy;
 
-		public Coward(Mover mover, AllNavigationSettings navSet)
-			: base(mover)
+		private Logable Log
 		{
-			this.m_logger = new Logger(() => m_controlBlock.CubeGrid.DisplayName);
+			get { return new Logable(m_controlBlock.CubeGrid); }
+		}
 
-			m_logger.debugLog("Initialized");
+		public Coward(Pathfinder pathfinder, AllNavigationSettings navSet)
+			: base(pathfinder)
+		{
+			Log.DebugLog("Initialized");
 		}
 
 		#region IEnemyResponse Members
@@ -46,7 +47,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 		public override void Move()
 		{
-			m_logger.debugLog("entered");
+			Log.DebugLog("entered");
 
 			if (m_enemy == null)
 			{
@@ -58,13 +59,13 @@ namespace Rynchodon.Autopilot.Navigator
 			Vector3D flyDirection = position - m_enemy.GetPosition();
 			flyDirection.Normalize();
 
-			Vector3D destination = position + flyDirection * 1e6;
-			m_mover.CalcMove(m_mover.Block.Pseudo, destination, Vector3.Zero);
+			Destination destination = new Destination(position + flyDirection * 1e6);
+			m_pathfinder.MoveTo(destinations: destination);
 		}
 
 		public void Rotate()
 		{
-			m_logger.debugLog("entered");
+			Log.DebugLog("entered");
 			
 			if (m_enemy == null)
 			{

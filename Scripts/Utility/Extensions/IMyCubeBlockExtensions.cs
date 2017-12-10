@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using Sandbox.Definitions;
 using Sandbox.Game.Entities;
-using Sandbox.Game.Multiplayer;
+using Sandbox.Game.Entities.Cube;
 using Sandbox.ModAPI;
 using VRage.Game;
+using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRageMath;
-using SpaceEngineers.Game.ModAPI;
+using Ingame = Sandbox.ModAPI.Ingame;
+using SE_Ingame = SpaceEngineers.Game.ModAPI.Ingame;
 
 namespace Rynchodon
 {
@@ -60,12 +62,12 @@ namespace Rynchodon
 				Vector3 directionVector = block.WorldMatrix.GetDirectionVector(direction);
 				double cosAngle = directionVector.Dot(worldDirection);
 
-				//myLogger.debugLog(cosAngle < -1 || cosAngle > 1, "cosAngle out of bounds: " + cosAngle, "GetFaceDirection()", Logger.severity.ERROR); // sometimes values are slightly out of range
+				//Log.DebugLog(cosAngle < -1 || cosAngle > 1, "cosAngle out of bounds: " + cosAngle, "GetFaceDirection()", Logger.severity.ERROR); // sometimes values are slightly out of range
 				Logger.DebugLog("cosAngle invalid", Logger.severity.ERROR, condition: double.IsNaN(cosAngle) || double.IsInfinity(cosAngle));
 
 				if (cosAngle > bestDirectionAngle)
 				{
-					//myLogger.debugLog("angle: " + angle + ", bestDirectionAngle: " + bestDirectionAngle + ", direction: " + direction, "GetFaceDirection()");
+					//Log.DebugLog("angle: " + angle + ", bestDirectionAngle: " + bestDirectionAngle + ", direction: " + direction, "GetFaceDirection()");
 					bestDirection = direction;
 					bestDirectionAngle = cosAngle;
 				}
@@ -92,12 +94,12 @@ namespace Rynchodon
 		/// </remarks>
 		public static IEnumerable<Base6Directions.Direction> FaceDirections(this IMyCubeBlock block)
 		{
-			if (block is IMySolarPanel || block is IMyOxygenFarm)
+			if (block is SE_Ingame.IMySolarPanel || block is SE_Ingame.IMyOxygenFarm)
 			{
 				yield return Base6Directions.Direction.Forward;
 				yield return Base6Directions.Direction.Backward;
 			}
-			else if (block is IMyLaserAntenna)
+			else if (block is Ingame.IMyLaserAntenna)
 			{
 				// up is really bad for laser antenna, it can't pick an azimuth and spins constantly
 				yield return Base6Directions.Direction.Forward;
@@ -105,9 +107,9 @@ namespace Rynchodon
 				yield return Base6Directions.Direction.Backward;
 				yield return Base6Directions.Direction.Left;
 			}
-			else if (block is IMyLandingGear)
+			else if (block is SE_Ingame.IMyLandingGear)
 				yield return Base6Directions.Direction.Down;
-			else if (block is IMyShipMergeBlock)
+			else if (block is SE_Ingame.IMyShipMergeBlock)
 				yield return Base6Directions.Direction.Right;
 			else
 				yield return Base6Directions.Direction.Forward;
@@ -144,7 +146,7 @@ namespace Rynchodon
 				case Base6Directions.Direction.Forward:
 					return block.LocalAABB.Size.Z;
 			}
-			//VRage.Exceptions.ThrowIf<NotImplementedException>(true, "direction not implemented: " + direction);
+			VRage.Exceptions.ThrowIf<NotImplementedException>(true, "direction not implemented: " + direction);
 			throw new Exception();
 		}
 
@@ -162,6 +164,62 @@ namespace Rynchodon
 		public static MyCubeBlockDefinition GetCubeBlockDefinition(this IMyCubeBlock block)
 		{
 			return ((MyCubeBlock)block).BlockDefinition;
+		}
+
+		public static bool IsOnSide(this IMyCubeBlock block, Vector3 side)
+		{
+			Vector3 blockPosition = block.LocalPosition();
+			Vector3D centreOfMass = block.CubeGrid.Physics.CenterOfMassWorld;
+			MatrixD invWorld = block.CubeGrid.PositionComp.WorldMatrixNormalizedInv;
+			Vector3D.Transform(ref centreOfMass, ref invWorld, out centreOfMass);
+			Vector3 localCentreOfMass = centreOfMass;
+
+			float blockPosInDirect; Vector3.Dot(ref blockPosition, ref side, out blockPosInDirect);
+			float centreInDirect; Vector3.Dot(ref localCentreOfMass, ref side, out centreInDirect);
+
+			return blockPosInDirect > centreInDirect;
+		}
+
+		public static void EnableGameThread(this IMyCubeBlock block, bool enable)
+		{
+			MyAPIGateway.Utilities.InvokeOnGameThread(() => ((MyFunctionalBlock)block).Enabled = enable);
+		}
+
+		/// <summary>
+		/// Creates an AABB that includes all subparts of the block.
+		/// </summary>
+		/// <param name="block">The block to create the AABB for.</param>
+		/// <param name="gsAABB">An AABB that includes all subparts of the block, in grid space.</param>
+		public static void CombinedAABB(this MyCubeBlock block, out BoundingBox gsAABB)
+		{
+			BoundingBox bsAABBSum = block.PositionComp.LocalAABB;
+
+			Dictionary<string, MyEntitySubpart> subparts = block.Subparts;
+			if (subparts != null && subparts.Count != 0)
+				foreach (MyEntitySubpart part in subparts.Values)
+					IncludeAABB(part, ref bsAABBSum);
+
+			Matrix blockLocalMatrix = block.PositionComp.LocalMatrix;
+			gsAABB = bsAABBSum.Transform(ref blockLocalMatrix);
+		}
+
+		/// <summary>
+		/// Include AABB for entity and all subparts in psAABB.
+		/// </summary>
+		/// <param name="entity">Entity to include the AABB of.</param>
+		/// <param name="psAABB">In entity's parent's space.</param>
+		private static void IncludeAABB(MyEntity entity, ref BoundingBox psAABB)
+		{
+			BoundingBox esAABBSum = entity.PositionComp.LocalAABB;
+
+			Dictionary<string, MyEntitySubpart> subparts = entity.Subparts;
+			if (subparts != null && subparts.Count != 0)
+				foreach (MyEntitySubpart part in subparts.Values)
+					IncludeAABB(part, ref esAABBSum);
+
+			Matrix entityLocalMatrix = entity.PositionComp.LocalMatrix;
+			BoundingBox psEntityAABB = esAABBSum.Transform(ref entityLocalMatrix);
+			psAABB.Include(ref psEntityAABB); // modifies psAABB and returns same
 		}
 
 	}

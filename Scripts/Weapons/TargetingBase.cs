@@ -1,9 +1,16 @@
+#if DEBUG
+//#define TRACE
+#endif
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Rynchodon.AntennaRelay;
+using Rynchodon.Utility;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Game.Entities;
+using Sandbox.Game.Entities.Character;
 using Sandbox.ModAPI;
 using VRage;
 using VRage.Collections;
@@ -12,6 +19,7 @@ using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRageMath;
+using System.Diagnostics;
 
 namespace Rynchodon.Weapons
 {
@@ -32,23 +40,15 @@ namespace Rynchodon.Weapons
 		#region Static
 
 		private static Dictionary<long, WeaponCounts> WeaponsTargeting = new Dictionary<long, WeaponCounts>();
-		private static Logger s_logger = new Logger();
 		private static FastResourceLock lock_WeaponsTargeting = new FastResourceLock();
 
-		static TargetingBase()
+		[OnWorldClose]
+		private static void Unload()
 		{
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
+			WeaponsTargeting.Clear();
 		}
 
-		private static void Entities_OnCloseAll()
-		{
-			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
-			WeaponsTargeting = null;
-			s_logger = null;
-			lock_WeaponsTargeting = null;
-		}
-
-		public static int GetWeaponsTargetingProjectile(IMyEntity entity)
+		public static int GetWeaponsTargeting(IMyEntity entity)
 		{
 			WeaponCounts result;
 			using (lock_WeaponsTargeting.AcquireSharedUsing())
@@ -59,11 +59,9 @@ namespace Rynchodon.Weapons
 
 		#endregion Static
 
-		private readonly Logger myLogger;
 		public readonly IMyEntity MyEntity;
 		/// <summary>Either the weapon block that is targeting or the block that created the weapon.</summary>
-		public readonly IMyCubeBlock CubeBlock;
-		public readonly IMyFunctionalBlock FuncBlock;
+		public readonly IMyUserControllableGun CubeBlock;
 
 		/// <summary>TryHard means the weapon is less inclined to switch targets and will continue to track targets when an intercept vector cannot be found.</summary>
 		protected bool TryHard = false;
@@ -71,14 +69,15 @@ namespace Rynchodon.Weapons
 		private ulong m_nextLastSeenSearch;
 		private Target value_CurrentTarget;
 		/// <summary>The target that is being processed.</summary>
-		protected Target myTarget;
+		private Target myTarget;
 
 		protected List<IMyEntity> PotentialObstruction = new List<IMyEntity>();
 		/// <summary>Targets that cannot be hit.</summary>
-		private readonly MyUniqueList<IMyEntity> Blacklist = new MyUniqueList<IMyEntity>();
+		private readonly HashSet<long> Blacklist = new HashSet<long>();
 		private readonly Dictionary<TargetType, List<IMyEntity>> Available_Targets = new Dictionary<TargetType, List<IMyEntity>>();
 		private List<MyEntity> nearbyEntities = new List<MyEntity>();
 
+		private Logable Log { get { return new Logable(MyEntity); } }
 		/// <summary>Accumulation of custom terminal, vanilla terminal, and text commands.</summary>
 		public TargetingOptions Options { get; protected set; }
 
@@ -90,7 +89,7 @@ namespace Rynchodon.Weapons
 		public Target CurrentTarget
 		{
 			get { return value_CurrentTarget; }
-			set
+			private set
 			{
 				if (value_CurrentTarget != null && value != null && value_CurrentTarget.Entity == value.Entity)
 				{
@@ -104,31 +103,31 @@ namespace Rynchodon.Weapons
 					{
 						WeaponCounts counts;
 						if (!WeaponsTargeting.TryGetValue(value_CurrentTarget.Entity.EntityId, out counts))
-							throw new Exception("WeaponsTargetingProjectile does not contain " + value_CurrentTarget.Entity.nameWithId());
-						myLogger.debugLog("counts are now: " + counts + ", target: " + value_CurrentTarget.Entity.nameWithId());
+							throw new Exception("WeaponsTargeting does not contain " + value_CurrentTarget.Entity.nameWithId());
+						Log.DebugLog("counts are now: " + counts + ", target: " + value_CurrentTarget.Entity.nameWithId());
 						if (GuidedLauncher)
 						{
-							myLogger.debugLog("guided launcher count is already at 0", Logger.severity.FATAL, condition: counts.GuidedLauncher == 0);
+							Log.DebugLog("guided launcher count is already at 0", Logger.severity.FATAL, condition: counts.GuidedLauncher == 0);
 							counts.GuidedLauncher--;
 						}
 						else if (this is Guided.GuidedMissile)
 						{
-							myLogger.debugLog("guided missile count is already at 0", Logger.severity.FATAL, condition: counts.GuidedMissile == 0);
+							Log.DebugLog("guided missile count is already at 0", Logger.severity.FATAL, condition: counts.GuidedMissile == 0);
 							counts.GuidedMissile--;
 						}
 						else
 						{
-							myLogger.debugLog("basic weapon count is already at 0", Logger.severity.FATAL, condition: counts.BasicWeapon == 0);
+							Log.DebugLog("basic weapon count is already at 0", Logger.severity.FATAL, condition: counts.BasicWeapon == 0);
 							counts.BasicWeapon--;
 						}
 						if (counts.BasicWeapon == 0 && counts.GuidedLauncher == 0 && counts.GuidedMissile == 0)
 						{
-							myLogger.debugLog("removing. counts are now: " + counts + ", target: " + value_CurrentTarget.Entity.nameWithId());
+							Log.DebugLog("removing. counts are now: " + counts + ", target: " + value_CurrentTarget.Entity.nameWithId());
 							WeaponsTargeting.Remove(value_CurrentTarget.Entity.EntityId);
 						}
 						else
 						{
-							myLogger.debugLog("-- counts are now: " + counts + ", target: " + value_CurrentTarget.Entity.nameWithId());
+							Log.DebugLog("-- counts are now: " + counts + ", target: " + value_CurrentTarget.Entity.nameWithId());
 							WeaponsTargeting[value_CurrentTarget.Entity.EntityId] = counts;
 						}
 					}
@@ -138,7 +137,7 @@ namespace Rynchodon.Weapons
 						WeaponCounts counts;
 						if (!WeaponsTargeting.TryGetValue(value.Entity.EntityId, out counts))
 							counts = new WeaponCounts();
-						myLogger.debugLog("counts are now: " + counts + ", target: " + value.Entity.nameWithId());
+						Log.DebugLog("counts are now: " + counts + ", target: " + value.Entity.nameWithId());
 						if (GuidedLauncher)
 							counts.GuidedLauncher++;
 						else if (this is Guided.GuidedMissile)
@@ -146,12 +145,16 @@ namespace Rynchodon.Weapons
 						else
 							counts.BasicWeapon++;
 						WeaponsTargeting[value.Entity.EntityId] = counts;
-						myLogger.debugLog("++ counts are now: " + counts + ", target: " + value.Entity.nameWithId());
+						Log.DebugLog("++ counts are now: " + counts + ", target: " + value.Entity.nameWithId());
 					}
 				}
-
 				value_CurrentTarget = value;
 			}
+		}
+
+		public void SetTarget(Target target)
+		{
+			CurrentTarget = myTarget = target;
 		}
 
 		public TargetingBase(IMyEntity entity, IMyCubeBlock controllingBlock)
@@ -161,60 +164,47 @@ namespace Rynchodon.Weapons
 			if (controllingBlock == null)
 				throw new ArgumentNullException("controllingBlock");
 
-			myLogger = new Logger(entity);
 			MyEntity = entity;
-			CubeBlock = controllingBlock;
-			FuncBlock = controllingBlock as IMyFunctionalBlock;
+			CubeBlock = (IMyUserControllableGun)controllingBlock;
 
 			myTarget = NoTarget.Instance;
 			CurrentTarget = myTarget;
 			Options = new TargetingOptions();
-			entity.OnClose += obj => {
-				if (WeaponsTargeting != null)
-					CurrentTarget = null;
-			};
+			entity.OnClose += Entity_OnClose;
 
-			//myLogger.debugLog("entity: " + MyEntity.getBestName() + ", block: " + CubeBlock.getBestName(), "TargetingBase()");
+			//Log.DebugLog("entity: " + MyEntity.getBestName() + ", block: " + CubeBlock.getBestName(), "TargetingBase()");
 		}
 
-		public TargetingBase(IMyCubeBlock block)
-			: this(block, block)
+		private void Entity_OnClose(IMyEntity obj)
 		{
-			myLogger = new Logger(block);
+			if (Globals.WorldClosed)
+				return;
+			CurrentTarget = null;
 		}
 
-		private bool PhysicalProblem(Vector3D targetPos, IMyEntity target)
+		public TargetingBase(IMyCubeBlock block) : this(block, block) { }
+
+		private bool PhysicalProblem(ref Vector3D targetPos, IMyEntity target)
 		{
-			return !CanRotateTo(targetPos) || Obstructed(targetPos, target);
+			return !CanRotateTo(ref targetPos, target) || Obstructed(ref targetPos, target);
 		}
 
 		private bool myTarget_PhysicalProblem()
 		{
-			myLogger.debugLog("No current target", Logger.severity.FATAL, condition: myTarget == null || myTarget.Entity == null);
+			Log.DebugLog("No current target", Logger.severity.FATAL, condition: myTarget == null || myTarget.Entity == null);
 			Vector3D targetPos = myTarget.GetPosition();
-			return !myTarget_CanRotateTo(targetPos) || Obstructed(targetPos, myTarget.Entity);
+			return !CanRotateTo(ref targetPos, myTarget.Entity) || Obstructed(ref targetPos, myTarget.Entity);
 		}
 
 		/// <summary>
-		/// Used to apply restrictions on rotation, such as min/max elevation/azimuth. Tested for new targets.
+		/// Used to apply restrictions on rotation, such as min/max elevation/azimuth.
 		/// </summary>
 		/// <param name="targetPos">The position of the target.</param>
 		/// <returns>true if the rotation is allowed</returns>
 		/// <remarks>Invoked on targeting thread.</remarks>
-		protected abstract bool CanRotateTo(Vector3D targetPos);
+		protected abstract bool CanRotateTo(ref Vector3D targetPos, IMyEntity target);
 
-		/// <summary>
-		/// Used to apply restrictions on rotation, such as min/max elevation/azimuth. Tested for current target.
-		/// </summary>
-		/// <param name="targetPos">The position of the target.</param>
-		/// <returns>true if the rotation is allowed</returns>
-		/// <remarks>Invoked on targeting thread.</remarks>
-		protected virtual bool myTarget_CanRotateTo(Vector3D targetPos)
-		{
-			return CanRotateTo(targetPos);
-		}
-
-		protected abstract bool Obstructed(Vector3D targetPos, IMyEntity target);
+		protected abstract bool Obstructed(ref Vector3D targetPos, IMyEntity target);
 
 		/// <summary>
 		/// Determines the speed of the projectile.
@@ -241,24 +231,30 @@ namespace Rynchodon.Weapons
 			Blacklist.Clear();
 		}
 
+#if DEBUG
+		protected void BlacklistTarget([CallerMemberName] string caller = null)
+		{
+			Log.DebugLog("Blacklisting " + myTarget.Entity + ", caller: " + caller);
+#else
 		protected void BlacklistTarget()
 		{
-			myLogger.debugLog("Blacklisting " + myTarget.Entity);
-			Blacklist.Add(myTarget.Entity);
+#endif
+			Blacklist.Add(myTarget.Entity.EntityId);
 			myTarget = NoTarget.Instance;
 			CurrentTarget = myTarget;
 		}
 
-		#region Targeting
+			#region Targeting
 
-		/// <summary>
-		/// Finds a target
-		/// </summary>
+			/// <summary>
+			/// Finds a target
+			/// </summary>
 		protected void UpdateTarget()
 		{
+			Log.TraceLog("entered");
 			if (Options.TargetingRange < 1f)
 			{
-				myLogger.debugLog("Not targeting, zero range");
+				Log.DebugLog("Not targeting, zero range");
 				return;
 			}
 
@@ -267,11 +263,8 @@ namespace Rynchodon.Weapons
 			if (myTarget.Entity != null && !myTarget.Entity.Closed)
 			{
 				if (TryHard)
-				{
-					if (!myTarget_PhysicalProblem())
-						return;
-				}
-				else if ((myTarget.TType & TargetType.Projectile) != 0 && ProjectileIsThreat(myTarget.Entity, myTarget.TType) && !myTarget_PhysicalProblem())
+					return;
+				if ((myTarget.TType & TargetType.Projectile) != 0 && ProjectileIsThreat(myTarget.Entity, myTarget.TType))
 					return;
 			}
 
@@ -280,16 +273,34 @@ namespace Rynchodon.Weapons
 			CollectTargets();
 			PickATarget();
 
-			myLogger.debugLog(() => "current target: " + CurrentTarget.Entity.getBestName() + ", new target: " + myTarget.Entity.getBestName(), condition: CurrentTarget != myTarget && CurrentTarget != null && myTarget != null);
+			LogTargetChange(CurrentTarget, myTarget);
 
 			CurrentTarget = myTarget;
+		}
+
+		[Conditional("DEBUG")]
+		private void LogTargetChange(Target currentTarget, Target newTarget)
+		{
+			if (currentTarget == null || currentTarget.Entity == null)
+			{
+				if (newTarget != null && newTarget.Entity != null)
+					Log.DebugLog("Acquired a target: " + newTarget.Entity.nameWithId());
+				return;
+			}
+			else
+			{
+				if (newTarget == null || newTarget.Entity == null)
+					Log.DebugLog("Lost target: " + currentTarget.Entity.nameWithId());
+				else if (currentTarget.Entity != newTarget.Entity)
+					Log.DebugLog("Switching target from " + currentTarget.Entity.nameWithId() + " to " + newTarget.Entity.nameWithId());
+			}
 		}
 
 		/// <summary>
 		/// Targets a LastSeen chosen from the given storage, will overrride current target.
 		/// </summary>
 		/// <param name="storage">NetworkStorage to get LastSeen from.</param>
-		protected void GetLastSeenTarget(RelayStorage storage, double range)
+		public void GetLastSeenTarget(RelayStorage storage, double range)
 		{
 			if (Globals.UpdateCount < m_nextLastSeenSearch)
 				return;
@@ -297,13 +308,13 @@ namespace Rynchodon.Weapons
 
 			if (storage == null)
 			{
-				//myLogger.debugLog("no storage", "GetLastSeenTarget()", Logger.severity.INFO);
+				//Log.DebugLog("no storage", "GetLastSeenTarget()", Logger.severity.INFO);
 				return;
 			}
 
 			if (storage.LastSeenCount == 0)
 			{
-				//myLogger.debugLog("no last seen in storage", "GetLastSeenTarget()", Logger.severity.DEBUG);
+				//Log.DebugLog("no last seen in storage", "GetLastSeenTarget()", Logger.severity.DEBUG);
 				return;
 			}
 
@@ -315,6 +326,7 @@ namespace Rynchodon.Weapons
 				LastSeenTarget lst = myTarget as LastSeenTarget;
 				if (lst != null && lst.Block != null && !lst.Block.Closed)
 				{
+					Log.TraceLog("Updating current last seen target");
 					lst.Update(processing);
 					CurrentTarget = myTarget;
 					return;
@@ -322,6 +334,7 @@ namespace Rynchodon.Weapons
 
 				if (ChooseBlock(processing, out targetBlock))
 				{
+					Log.TraceLog("Updating current last seen, chose a new block");
 					myTarget = new LastSeenTarget(processing, targetBlock);
 					CurrentTarget = myTarget;
 					return;
@@ -332,12 +345,13 @@ namespace Rynchodon.Weapons
 			{
 				if (storage.TryGetLastSeen(Options.TargetEntityId, out processing))
 				{
+					Log.TraceLog("Got last seen for entity id");
 					ChooseBlock(processing, out targetBlock);
 					myTarget = new LastSeenTarget(processing, targetBlock);
 					CurrentTarget = myTarget;
 				}
 				//else
-				//	myLogger.debugLog("failed to get last seen from entity id", "GetLastSeenTarget()");
+				//	Log.DebugLog("failed to get last seen from entity id", "GetLastSeenTarget()");
 				return;
 			}
 
@@ -346,21 +360,22 @@ namespace Rynchodon.Weapons
 
 			if (SEAD)
 			{
-				float highestPowerLevel = 0f;
+				throw new NotImplementedException();
+				//float highestPowerLevel = 0f;
 
-				storage.ForEachLastSeen((LastSeen seen) => {
-					if (seen.isRecent() && Options.CanTargetType(seen.Entity) && CanConsiderHostile(seen.Entity))
-					{
-						IMyCubeBlock block;
-						float powerLevel;
-						if (RadarEquipment.GetRadarEquipment(seen, out block, out powerLevel) && powerLevel > highestPowerLevel)
-						{
-							highestPowerLevel = powerLevel;
-							processing = seen;
-							targetBlock = block;
-						}
-					}
-				});
+				//storage.ForEachLastSeen((LastSeen seen) => {
+				//	if (seen.isRecent() && Options.CanTargetType(seen.Entity) && CanConsiderHostile(seen.Entity))
+				//	{
+				//		IMyCubeBlock block;
+				//		float powerLevel;
+				//		if (RadarEquipment_old.GetRadarEquipment(seen, out block, out powerLevel) && powerLevel > highestPowerLevel)
+				//		{
+				//			highestPowerLevel = powerLevel;
+				//			processing = seen;
+				//			targetBlock = block;
+				//		}
+				//	}
+				//});
 			}
 			else
 			{
@@ -391,13 +406,19 @@ namespace Rynchodon.Weapons
 					}
 				});
 
-				myLogger.debugLog(() => "chose last seen with entity: " + processing.Entity.nameWithId() + ", block: " + targetBlock.getBestName() + ", type: " + bestType + ", distance squared: " + closestDist, condition: processing != null);
-				myLogger.debugLog("no last seen target found", condition: processing == null);
+				Log.DebugLog(() => "chose last seen with entity: " + processing.Entity.nameWithId() + ", block: " + targetBlock.getBestName() + ", type: " + bestType + ", distance squared: " + closestDist + ", position: " + processing.Entity.GetPosition(), condition: processing != null);
+				Log.DebugLog("no last seen target found", condition: processing == null);
 			}
 
 			if (processing == null)
 			{
-				//myLogger.debugLog("failed to get a target from last seen", "GetLastSeenTarget()");
+				if (this is Guided.GuidedMissile)
+				{
+					Log.TraceLog("GuidedMissile failed to get LastSeen target, keeping previous");
+					return;
+				}
+
+				//Log.DebugLog("failed to get a target from last seen", "GetLastSeenTarget()");
 				myTarget = NoTarget.Instance;
 				CurrentTarget = myTarget;
 			}
@@ -418,8 +439,9 @@ namespace Rynchodon.Weapons
 
 			if (SEAD)
 			{
-				float powerLevel;
-				return RadarEquipment.GetRadarEquipment(seen, out block, out powerLevel);
+				throw new NotImplementedException();
+				//float powerLevel;
+				//return RadarEquipment_old.GetRadarEquipment(seen, out block, out powerLevel);
 			}
 
 			if (!seen.RadarInfoIsRecent())
@@ -450,13 +472,21 @@ namespace Rynchodon.Weapons
 			BoundingSphereD nearbySphere = new BoundingSphereD(ProjectilePosition(), Options.TargetingRange);
 			MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref nearbySphere, nearbyEntities);
 
+			Log.TraceLog("nearby entities: " + nearbyEntities.Count);
+
 			foreach (IMyEntity entity in nearbyEntities)
 			{
 				if (Options.TargetEntityId > 0L && entity.EntityId != Options.TargetEntityId)
+				{
+					Log.TraceLog("not allowed by id: " + entity.nameWithId());
 					continue;
+				}
 
-				if (Blacklist.Contains(entity))
+				if (Blacklist.Contains(entity.EntityId))
+				{
+					Log.TraceLog("blacklisted: " + entity.nameWithId());
 					continue;
+				}
 
 				if (entity is IMyFloatingObject)
 				{
@@ -473,25 +503,25 @@ namespace Rynchodon.Weapons
 					continue;
 				}
 
-				IMyCharacter asChar = entity as IMyCharacter;
+				MyCharacter asChar = entity as MyCharacter;
 				if (asChar != null)
 				{
-					//myLogger.debugLog("character: " + entity.nameWithId());
+					Log.TraceLog("character: " + entity.nameWithId());
 
-					if (CharacterStateTracker.CurrentState(entity) == MyCharacterMovementEnum.Died)
+					if (asChar.IsDead)
 					{
-						myLogger.debugLog("(s)he's dead, jim: " + entity.nameWithId());
+						Log.TraceLog("(s)he's dead, jim: " + entity.nameWithId());
 						continue;
 					}
 
 					if (asChar.IsBot || CanConsiderHostile(entity))
 					{
-						//myLogger.debugLog("hostile: " + entity.nameWithId());
+						Log.TraceLog("hostile: " + entity.nameWithId());
 						AddTarget(TargetType.Character, entity);
 					}
 					else
 					{
-						//myLogger.debugLog("not hostile: " + entity.nameWithId());
+						Log.TraceLog("not hostile: " + entity.nameWithId());
 						PotentialObstruction.Add(entity);
 					}
 					continue;
@@ -500,6 +530,8 @@ namespace Rynchodon.Weapons
 				IMyCubeGrid asGrid = entity as IMyCubeGrid;
 				if (asGrid != null)
 				{
+					Log.TraceLog("grid: " + asGrid.getBestName());
+
 					if (!asGrid.Save)
 						continue;
 
@@ -536,9 +568,11 @@ namespace Rynchodon.Weapons
 		private void AddTarget(TargetType tType, IMyEntity target)
 		{
 			if (!Options.CanTargetType(tType))
+			{
+				Log.TraceLog("cannot carget type: " + tType + ", allowed: " + Options.CanTarget);
 				return;
-
-			//myLogger.debugLog(target.ToString().StartsWith("MyMissile"), "missile: " + target.getBestName() + ", type = " + tType + ", allowed targets = " + Options.CanTarget, "AddTarget()");
+			}
+			Log.TraceLog("adding to target list: " + target.getBestName() + ", " + tType);
 
 			List<IMyEntity> list;
 			if (!Available_Targets.TryGetValue(tType, out list))
@@ -580,7 +614,7 @@ namespace Rynchodon.Weapons
 			if (!Available_Targets.TryGetValue(tType, out targetsOfType))
 				return false;
 
-			//myLogger.debugLog("getting closest " + tType + ", from list of " + targetsOfType.Count);
+			Log.TraceLog("getting closest " + tType + ", from list of " + targetsOfType.Count);
 
 			IMyEntity closest = null;
 
@@ -614,14 +648,14 @@ namespace Rynchodon.Weapons
 					distanceValue = Vector3D.DistanceSquared(targetPosition, weaponPosition);
 					if (distanceValue > Options.TargetingRangeSquared)
 					{
-						//myLogger.debugLog("for type: " + tType + ", too far to target: " + target.getBestName(), "SetClosest()");
+						Log.TraceLog("for type: " + tType + ", too far to target: " + target.getBestName());
 						continue;
 					}
 
-					if (PhysicalProblem(targetPosition, target))
+					if (PhysicalProblem(ref targetPosition, target))
 					{
-						//myLogger.debugLog("can't target: " + target.getBestName(), "SetClosest()");
-						Blacklist.Add(target);
+						Log.TraceLog("can't target: " + target.getBestName());
+						Blacklist.Add(target.EntityId);
 						continue;
 					}
 				}
@@ -635,7 +669,7 @@ namespace Rynchodon.Weapons
 
 			if (closest != null)
 			{
-				//myLogger.debugLog("closest: " + closest.nameWithId());
+				Log.TraceLog("closest: " + closest.nameWithId());
 				myTarget = new TurretTarget(closest, tType);
 				return true;
 			}
@@ -661,13 +695,23 @@ namespace Rynchodon.Weapons
 
 			if (Disable && !block.IsWorking)
 				if (!block.IsFunctional || !Options.FlagSet(TargetingFlags.Functional))
+				{
+					Log.TraceLog("disable: " + Disable + ", working: " + block.IsWorking + ", functional: " + block.IsFunctional + ", target functional: " + Options.FlagSet(TargetingFlags.Functional));
 					return false;
+				}
 
-			if (Blacklist.Contains(block))
+			if (Blacklist.Contains(block.EntityId))
+			{
+				Log.TraceLog("blacklisted: " + block.nameWithId());
 				return false;
+			}
 
-			if (!CanRotateTo(block.GetPosition()))
+			Vector3D position = block.GetPosition();
+			if (!CanRotateTo(ref position, block))
+			{
+				Log.TraceLog("cannot face: " + block.nameWithId());
 				return false;
+			}
 
 			return true;
 		}
@@ -692,34 +736,35 @@ namespace Rynchodon.Weapons
 			target = null;
 			distanceValue = double.MaxValue;
 
+			if (cache == null)
+				return false;
+
 			if (cache.TerminalBlocks == 0)
 			{
-				//myLogger.debugLog("no terminal blocks on grid: " + grid.DisplayName);
+				Log.TraceLog("no terminal blocks on grid: " + grid.DisplayName);
 				return false;
 			}
 
 			// get decoy block
 			{
-				var decoyBlockList = cache.GetBlocksOfType(typeof(MyObjectBuilder_Decoy));
-				if (decoyBlockList != null)
-					foreach (IMyCubeBlock block in decoyBlockList)
+				foreach (IMyCubeBlock block in cache.BlocksOfType(typeof(MyObjectBuilder_Decoy)))
+				{
+					if (!TargetableBlock(block, true))
+						continue;
+
+					double distanceSq = Vector3D.DistanceSquared(myPosition, block.GetPosition());
+					if (doRangeTest && distanceSq > Options.TargetingRangeSquared)
+						continue;
+
+					if (distanceSq < distanceValue && CanConsiderHostile(block))
 					{
-						if (!TargetableBlock(block, true))
-							continue;
-
-						double distanceSq = Vector3D.DistanceSquared(myPosition, block.GetPosition());
-						if (doRangeTest && distanceSq > Options.TargetingRangeSquared)
-							continue;
-
-						if (distanceSq < distanceValue && CanConsiderHostile(block))
-						{
-							target = block;
-							distanceValue = distanceSq;
-						}
+						target = block;
+						distanceValue = distanceSq;
 					}
+				}
 				if (target != null)
 				{
-					//myLogger.debugLog("for type = " + tType + " and grid = " + grid.DisplayName + ", found a decoy block: " + target.DisplayNameText + ", distanceValue: " + distanceValue);
+					Log.TraceLog("for type = " + tType + " and grid = " + grid.DisplayName + ", found a decoy block: " + target.DisplayNameText + ", distanceValue: " + distanceValue);
 					return true;
 				}
 			}
@@ -731,31 +776,42 @@ namespace Rynchodon.Weapons
 				IMyCubeBlock in_target = target;
 				double in_distValue = distanceValue;
 
-				Options.listOfBlocks.ForEach(cache, ref index, block => {
-					if (!TargetableBlock(block, true))
-						return;
-
-					double distSq = Vector3D.DistanceSquared(myPosition, block.GetPosition());
-					if (doRangeTest && distSq > Options.TargetingRangeSquared)
-						return;
-
-					int multiplier = index + 1;
-					distSq *= multiplier * multiplier * multiplier;
-
-					if (distSq < in_distValue && CanConsiderHostile(block))
+				foreach (MyDefinitionId[] ids in Options.listOfBlocks.IdGroups())
+				{
+					index++;
+					foreach (MyDefinitionId id in ids)
 					{
-						in_target = block;
-						in_distValue = distSq;
+						//Log.TraceLog("searching for blocks of type: " + id + ", count: " + cache.BlocksOfType(id).Count());
+						foreach (IMyCubeBlock block in cache.BlocksOfType(id))
+						{
+							if (!TargetableBlock(block, true))
+								continue;
+
+							double distSq = Vector3D.DistanceSquared(myPosition, block.GetPosition());
+							if (doRangeTest && distSq > Options.TargetingRangeSquared)
+							{
+								Log.TraceLog("out of range: " + block.nameWithId());
+								continue;
+							}
+
+							distSq *= index * index * index;
+
+							if (distSq < in_distValue && CanConsiderHostile(block))
+							{
+								in_target = block;
+								in_distValue = distSq;
+							}
+						}
 					}
-				});
+				}
 
 				target = in_target;
 				distanceValue = in_distValue;
 
 				if (target != null) // found a block from blocksToTarget
 				{
-					//myLogger.debugLog("for type = " + tType + " and grid = " + grid.DisplayName + ", target = " + target.DisplayNameText +
-					//	", distance = " + Vector3D.Distance(myPosition, target.GetPosition()) + ", distanceValue = " + distanceValue);
+					Log.TraceLog("for type = " + tType + " and grid = " + grid.DisplayName + ", target = " + target.DisplayNameText +
+						", distance = " + Vector3D.Distance(myPosition, target.GetPosition()) + ", distanceValue = " + distanceValue);
 					return true;
 				}
 			}
@@ -764,29 +820,27 @@ namespace Rynchodon.Weapons
 			bool destroy = (tType & TargetType.Moving) != 0 || (tType & TargetType.Destroy) != 0;
 			if (destroy || Options.blocksToTarget.IsNullOrEmpty())
 			{
-				List<IMySlimBlock> allSlims = new List<IMySlimBlock>();
-				grid.GetBlocks_Safe(allSlims, (slim) => slim.FatBlock is IMyTerminalBlock);
-
 				double closest = double.MaxValue;
-
-				foreach (IMySlimBlock slim in allSlims)
-					if (TargetableBlock(slim.FatBlock, !destroy))
+				foreach (MyCubeBlock block in cache.AllCubeBlocks())
+				{
+					if (block is IMyTerminalBlock && TargetableBlock(block, !destroy))
 					{
-						double distanceSq = Vector3D.DistanceSquared(myPosition, slim.FatBlock.GetPosition());
+						double distanceSq = Vector3D.DistanceSquared(myPosition, block.PositionComp.GetPosition());
 						if (doRangeTest && distanceSq > Options.TargetingRangeSquared)
 							continue;
 						distanceSq *= 1e12;
 
-						if (distanceSq < closest && CanConsiderHostile(slim.FatBlock))
+						if (distanceSq < closest && CanConsiderHostile(block))
 						{
-							target = slim.FatBlock;
+							target = block;
 							distanceValue = distanceSq;
 						}
 					}
+				}
 
 				if (target != null)
 				{
-					//myLogger.debugLog("for type = " + tType + " and grid = " + grid.DisplayName + ", found a block: " + target.DisplayNameText + ", distanceValue = " + distanceValue);
+					Log.TraceLog("for type = " + tType + " and grid = " + grid.DisplayName + ", found a block: " + target.DisplayNameText + ", distanceValue = " + distanceValue);
 					return true;
 				}
 			}
@@ -825,7 +879,7 @@ namespace Rynchodon.Weapons
 			{
 				IOrderedEnumerable<IMyEntity> sorted;
 				using (lock_WeaponsTargeting.AcquireSharedUsing())
-					sorted = targetsOfType.OrderBy(entity => GetWeaponsTargetingProjectile(entity));
+					sorted = targetsOfType.OrderBy(entity => GetWeaponsTargeting(entity));
 
 				foreach (IMyEntity entity in sorted)
 				{
@@ -851,7 +905,8 @@ namespace Rynchodon.Weapons
 							continue;
 					}
 
-					if (!PhysicalProblem(projectile.GetPosition(), projectile))
+					Vector3D position = projectile.GetPosition();
+					if (!PhysicalProblem(ref position, projectile))
 					{
 						myTarget = new TurretTarget(projectile, tType);
 						return true;
@@ -867,6 +922,9 @@ namespace Rynchodon.Weapons
 			if (projectile.Closed)
 				return false;
 
+			if (Guided.GuidedMissile.IsGuidedMissile(projectile.EntityId))
+				return true;
+
 			Vector3D projectilePosition = projectile.GetCentre();
 			BoundingSphereD ignoreArea = new BoundingSphereD(ProjectilePosition(), Options.TargetingRange / 10f);
 			if (ignoreArea.Contains(projectilePosition) == ContainmentType.Contains)
@@ -880,16 +938,16 @@ namespace Rynchodon.Weapons
 				return false;
 		}
 
-		#endregion
+#endregion
 
-		#region Target Interception
+#region Target Interception
 
 		/// <summary>
 		/// Calculates FiringDirection and InterceptionPoint
 		/// </summary>
 		protected void SetFiringDirection()
 		{
-			if (myTarget.Entity == null || myTarget.Entity.MarkedForClose || MyEntity.MarkedForClose)
+			if (myTarget.Entity == null || MyEntity.MarkedForClose)
 				return;
 
 			FindInterceptVector();
@@ -897,11 +955,11 @@ namespace Rynchodon.Weapons
 			{
 				if (myTarget_PhysicalProblem())
 				{
-					//myLogger.debugLog("Shot path is obstructed, blacklisting " + myTarget.Entity.getBestName());
+					//Log.DebugLog("Shot path is obstructed, blacklisting " + myTarget.Entity.getBestName());
 					BlacklistTarget();
 					return;
 				}
-				//myLogger.debugLog("got an intercept vector: " + myTarget.FiringDirection + ", ContactPoint: " + myTarget.ContactPoint + ", by entity: " + myTarget.Entity.GetCentre());
+				//Log.DebugLog("got an intercept vector: " + myTarget.FiringDirection + ", ContactPoint: " + myTarget.ContactPoint + ", by entity: " + myTarget.Entity.GetCentre());
 			}
 			CurrentTarget = myTarget;
 		}
@@ -913,15 +971,15 @@ namespace Rynchodon.Weapons
 			Vector3 shooterVel = MyEntity.GetLinearVelocity();
 			Vector3D targetOrigin = myTarget.GetPosition();
 
-			myLogger.debugLog(() => "shotOrigin is not valid: " + shotOrigin, Logger.severity.FATAL, condition: !shotOrigin.IsValid());
-			myLogger.debugLog(() => "shooterVel is not valid: " + shooterVel, Logger.severity.FATAL, condition: !shooterVel.IsValid());
-			myLogger.debugLog(() => "targetOrigin is not valid: " + targetOrigin, Logger.severity.FATAL, condition: !targetOrigin.IsValid());
+			//Log.DebugLog(() => "shotOrigin is not valid: " + shotOrigin, Logger.severity.FATAL, condition: !shotOrigin.IsValid());
+			//Log.DebugLog(() => "shooterVel is not valid: " + shooterVel, Logger.severity.FATAL, condition: !shooterVel.IsValid());
+			//Log.DebugLog(() => "targetOrigin is not valid: " + targetOrigin, Logger.severity.FATAL, condition: !targetOrigin.IsValid());
 
 			Vector3 targetVel = myTarget.GetLinearVelocity();
 			Vector3 relativeVel = (targetVel - shooterVel);
 
-			myLogger.debugLog(() => "targetVel is not valid: " + targetVel, Logger.severity.FATAL, condition: !targetVel.IsValid());
-			myLogger.debugLog(() => "relativeVel is not valid: " + relativeVel, Logger.severity.FATAL, condition: !relativeVel.IsValid());
+			//Log.DebugLog(() => "targetVel is not valid: " + targetVel, Logger.severity.FATAL, condition: !targetVel.IsValid());
+			//Log.DebugLog(() => "relativeVel is not valid: " + relativeVel, Logger.severity.FATAL, condition: !relativeVel.IsValid());
 
 			targetOrigin += relativeVel * Globals.UpdateDuration;
 			float shotSpeed = ProjectileSpeed(ref targetOrigin);
@@ -957,20 +1015,20 @@ namespace Rynchodon.Weapons
 				// Shot is too slow to intercept target.
 				if (TryHard)
 				{
-					//myLogger.debugLog("shot too slow, trying anyway", "FindInterceptVector()");
+					//Log.DebugLog("shot too slow, trying anyway", "FindInterceptVector()");
 					// direction is a trade-off between facing the target and fighting tangential velocity
 					Vector3 direction = directionToTarget + displacementToTarget * 0.01f + shotVelTang;
 					direction.Normalize();
 					myTarget.FiringDirection = direction;
 					myTarget.ContactPoint = shotOrigin + direction * distanceToTarget;
 
-					myLogger.debugLog(() => "invalid FiringDirection: " + myTarget.FiringDirection + ", directionToTarget: " + directionToTarget +
-						", displacementToTarget: " + displacementToTarget + ", shotVelTang: " + shotVelTang, Logger.severity.FATAL, condition: !myTarget.FiringDirection.IsValid());
-					myLogger.debugLog(() => "invalid ContactPoint: " + myTarget.ContactPoint + ", shotOrigin: " + shotOrigin +
-						", direction: " + direction + ", distanceToTarget: " + distanceToTarget, Logger.severity.FATAL, condition: !myTarget.ContactPoint.IsValid());
+					//Log.DebugLog(() => "invalid FiringDirection: " + myTarget.FiringDirection + ", directionToTarget: " + directionToTarget +
+					//	", displacementToTarget: " + displacementToTarget + ", shotVelTang: " + shotVelTang, Logger.severity.FATAL, condition: !myTarget.FiringDirection.IsValid());
+					//Log.DebugLog(() => "invalid ContactPoint: " + myTarget.ContactPoint + ", shotOrigin: " + shotOrigin +
+					//	", direction: " + direction + ", distanceToTarget: " + distanceToTarget, Logger.severity.FATAL, condition: !myTarget.ContactPoint.IsValid());
 					return;
 				}
-				//myLogger.debugLog("shot too slow, blacklisting");
+				//Log.DebugLog("shot too slow, blacklisting");
 				BlacklistTarget();
 				return;
 			}
@@ -994,10 +1052,10 @@ namespace Rynchodon.Weapons
 				myTarget.FiringDirection = firingDirection;
 				myTarget.ContactPoint = contactPoint;
 
-				myLogger.debugLog(() => "invalid FiringDirection: " + myTarget.FiringDirection + ", shotSpeedOrth: " + shotSpeedOrth +
-					", directionToTarget: " + directionToTarget + ", firingDirection: " + firingDirection, Logger.severity.FATAL, condition: !myTarget.FiringDirection.IsValid());
-				myLogger.debugLog(() => "invalid ContactPoint: " + myTarget.ContactPoint + ", timeToCollision: " + timeToCollision +
-					", shotVel: " + shotVel + ", contactPoint: " + contactPoint, Logger.severity.FATAL, condition: !myTarget.ContactPoint.IsValid());
+				//Log.DebugLog(() => "invalid FiringDirection: " + myTarget.FiringDirection + ", shotSpeedOrth: " + shotSpeedOrth +
+				//	", directionToTarget: " + directionToTarget + ", firingDirection: " + firingDirection, Logger.severity.FATAL, condition: !myTarget.FiringDirection.IsValid());
+				//Log.DebugLog(() => "invalid ContactPoint: " + myTarget.ContactPoint + ", timeToCollision: " + timeToCollision +
+				//	", shotVel: " + shotVel + ", contactPoint: " + contactPoint, Logger.severity.FATAL, condition: !myTarget.ContactPoint.IsValid());
 			}
 		}
 
@@ -1069,7 +1127,7 @@ namespace Rynchodon.Weapons
 			}
 		}
 
-		#endregion
+#endregion
 
 		private bool CanConsiderHostile(IMyEntity target)
 		{

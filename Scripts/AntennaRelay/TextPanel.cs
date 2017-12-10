@@ -1,20 +1,21 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Xml.Serialization;
 using Rynchodon.Attached;
 using Rynchodon.Autopilot;
 using Rynchodon.Instructions;
+using Rynchodon.Utility;
 using Rynchodon.Utility.Network;
 using Sandbox.Game.Entities.Blocks;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
-using Sandbox.ModAPI.Interfaces.Terminal;
 using VRage.Collections;
 using VRage.Game.ModAPI;
 using VRage.Utils;
 using VRageMath;
+using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Rynchodon.AntennaRelay
 {
@@ -29,11 +30,6 @@ namespace Rynchodon.AntennaRelay
 			public byte Options;
 		}
 
-		private const char separator = ':';
-		private const string radarIconId = "Radar";
-		private const string timeString = "Current as of: ";
-		private const string tab = "    ";
-
 		[Flags]
 		private enum Option : byte
 		{
@@ -45,156 +41,96 @@ namespace Rynchodon.AntennaRelay
 			Refresh = 16,
 		}
 
-		private class StaticVariables
+		private const char separator = ':';
+		private const string radarIconId = "Radar";
+		private const string timeString = "Current as of: ";
+		private const string tab = "    ";
+
+		private static readonly char[] OptionsSeparators = { ',', ';', ':' };
+		private static readonly List<long> s_detectedIds = new List<long>();
+
+		[OnWorldLoad]
+		private static void CreateTerminal()
 		{
-			public char[] OptionsSeparators = { ',', ';', ':' };
-			public Logger s_logger = new Logger();
-			public List<long> s_detectedIds = new List<long>();
-			public List<MyTerminalControlCheckbox<MyTextPanel>> checkboxes = new List<MyTerminalControlCheckbox<MyTextPanel>>();
-		}
+			Logger.DebugLog("entered", Logger.severity.TRACE);
+			TerminalControlHelper.EnsureTerminalControlCreated<MyTextPanel>();
 
-		private static StaticVariables Static = new StaticVariables();
+			MyTerminalAction<MyTextPanel> textPanel_displayEntities = new MyTerminalAction<MyTextPanel>("DisplayEntities", new StringBuilder("Display Entities"), "Textures\\GUI\\Icons\\Actions\\Start.dds")
+			{
+				ValidForGroups = false,
+				ActionWithParameters = TextPanel_DisplayEntities
+			};
+			MyTerminalControlFactory.AddAction(textPanel_displayEntities);
 
-		static TextPanel()
-		{
-            IMyTerminalAction textPanel_displayEntities = MyAPIGateway.TerminalControls.CreateAction<IMyTextPanel>("DisplayEntities");
+			MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MyTextPanel>());
 
-            textPanel_displayEntities.Name = new StringBuilder("Display Entities");
-            textPanel_displayEntities.Icon = "Textures\\GUI\\Icons\\Actions\\Start.dds";
-            textPanel_displayEntities.ValidForGroups = false;
-
-
-            //         MyTerminalAction<MyTextPanel> textPanel_displayEntities = new MyTerminalAction<MyTextPanel>("DisplayEntities", new StringBuilder("Display Entities"), "Textures\\GUI\\Icons\\Actions\\Start.dds")
-            //{
-            //	ValidForGroups = false,
-            //	ActionWithParameters = TextPanel_DisplayEntities
-            //};
-
-            //MyTerminalControlFactory.AddAction(textPanel_displayEntities);
-            MyAPIGateway.TerminalControls.AddAction<IMyTextPanel>(textPanel_displayEntities);
-            
-            //MyTerminalControlFactory.AddControl(new MyTerminalControlSeparator<MyTextPanel>());
-           
-
-            AddCheckbox("DisplayDetected", "Display Detected", "Write detected entities to the public text of the panel", Option.DisplayDetected);
+			AddCheckbox("DisplayDetected", "Display Detected", "Write detected entities to the public text of the panel", Option.DisplayDetected);
 			AddCheckbox("DisplayGPS", "Display GPS", "Write gps with detected entities", Option.GPS);
 			AddCheckbox("DisplayEntityId", "Display Entity ID", "Write entity ID with detected entities", Option.EntityId);
 			AddCheckbox("DisplayAutopilotStatus", "Display Autopilot Status", "Write the status of nearby Autopilots to the public text of the panel", Option.AutopilotStatus);
-
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
 		}
 
 		private static void AddCheckbox(string id, string title, string toolTip, Option opt)
 		{
-            IMyTerminalControlCheckbox control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyTextPanel>(id);                
-            control.Title = MyStringId.GetOrCompute(title);
-            control.Tooltip = MyStringId.GetOrCompute(toolTip);
-
-   //         IMyTerminalValueControl<bool> valueControl = control as IMyTerminalValueControl<bool>;
-			//valueControl.Getter = block => GetOptionTerminal(block, opt);
-			//valueControl.Setter = (block, value) => SetOptionTerminal(block, opt, value);
-
-            MyAPIGateway.TerminalControls.AddControl<IMyTextPanel>(control);
-            
-			Static.checkboxes.Add(control);
+			MyTerminalControlCheckbox<MyTextPanel> control = new MyTerminalControlCheckbox<MyTextPanel>(id, MyStringId.GetOrCompute(title), MyStringId.GetOrCompute(toolTip));
+			new ValueSync<bool, TextPanel>(control, (panel) => (panel.m_optionsTerminal & opt) == opt,
+				(panel, value) => {
+					if (value)
+						panel.m_optionsTerminal |= opt;
+					else
+						panel.m_optionsTerminal &= ~opt;
+				});
+			MyTerminalControlFactory.AddControl(control);
 		}
-
-		private static void Entities_OnCloseAll()
-		{
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
-			Static = null;
-		}
-
+		
 		/// <param name="args">EntityIds as long</param>
-		private static void TextPanel_DisplayEntities(IMyFunctionalBlock block, ListReader<Sandbox.ModAPI.Ingame.TerminalActionParameter> args)
+		private static void TextPanel_DisplayEntities(MyFunctionalBlock block, ListReader<Ingame.TerminalActionParameter> args)
 		{
-			Static.s_detectedIds.Clear();
+			s_detectedIds.Clear();
 
 			for (int i = 0; i < args.Count; i++)
 			{
-                if (args[i].TypeCode.ToString().Equals("11"))//  TypeCode.Int64)
-                {
-					Static.s_logger.debugLog("TerminalActionParameter # " + i + " is of wrong type, expected Int64, got " + args[i].TypeCode, Logger.severity.WARNING);
+				if (args[i].TypeCode != TypeCode.Int64)
+				{
+					Logger.DebugLog("TerminalActionParameter # " + i + " is of wrong type, expected Int64, got " + args[i].TypeCode, Logger.severity.WARNING);
 					if (MyAPIGateway.Session.Player != null)
 						block.AppendCustomInfo("Failed to display entities:\nTerminalActionParameter #" + i + " is of wrong type, expected Int64 (AKA long), got " + args[i].TypeCode + '\n');
 					return;
 				}
-				Static.s_detectedIds.Add((long)args[i].Value);
+				s_detectedIds.Add((long)args[i].Value);
 			}
 
 			TextPanel panel;
 			if (!Registrar.TryGetValue(block.EntityId, out panel))
 			{
-				Static.s_logger.alwaysLog("Text panel not found in registrar: " + block.EntityId, Logger.severity.ERROR);
+				Logger.AlwaysLog("Text panel not found in registrar: " + block.EntityId, Logger.severity.ERROR);
 				return;
 			}
 
-			Static.s_logger.debugLog("Found text panel with id: " + block.EntityId);
+			Logger.DebugLog("Found text panel with id: " + block.EntityId);
 
-			panel.Display(Static.s_detectedIds);
+			panel.Display(s_detectedIds);
 		}
 
-		private static bool GetOptionTerminal(Sandbox.ModAPI.IMyTerminalBlock block, Option opt)
-		{
-			TextPanel panel;
-			if (!Registrar.TryGetValue(block, out panel))
-			{
-				if (Static == null)
-					return false;
-				throw new ArgumentException("block: " + block.EntityId + " not found in registrar");
-			}
+		private readonly Ingame.IMyTextPanel m_textPanel;
 
-			return (panel.m_optionsTerminal & opt) != 0;
-		}
+		private Option m_optionsTerminal;
 
-		private static void SetOptionTerminal(Sandbox.ModAPI.IMyTerminalBlock block, Option opt, bool value)
-		{
-			TextPanel panel;
-			if (!Registrar.TryGetValue(block, out panel))
-			{
-				if (Static == null)
-					return;
-				throw new ArgumentException("block: " + block.EntityId + " not found in registrar");
-			}
-
-			if (value)
-				panel.m_optionsTerminal |= opt;
-			else
-				panel.m_optionsTerminal &= ~opt;
-		}
-
-		private static void UpdateVisual()
-		{
-			foreach (var control in Static.checkboxes)
-				control.UpdateVisual();
-		}
-
-		private readonly Sandbox.ModAPI.Ingame.IMyTextPanel m_textPanel;
-		private readonly Logger myLogger;
-
-		private readonly EntityValue<Option> m_optionsTerminal_ev;
-
-		private Sandbox.ModAPI.Ingame.IMyTerminalBlock myTermBlock;
+		private IMyTerminalBlock myTermBlock;
 		private RelayClient m_networkClient;
 		private Option m_options;
 		private List<sortableLastSeen> m_sortableList;
 		private TimeSpan m_lastDisplay;
 
-		private Option m_optionsTerminal
-		{
-			get { return m_optionsTerminal_ev.Value; }
-			set { m_optionsTerminal_ev.Value = value; }
-		}
+		private Logable Log { get { return new Logable(myTermBlock);  } }
 
 		public TextPanel(IMyCubeBlock block)
 			: base(block)
 		{
-			myLogger = new Logger(block);
 			m_textPanel = block as Ingame.IMyTextPanel;
 			myTermBlock = block as IMyTerminalBlock;
 			m_networkClient = new RelayClient(block);
-			myLogger.debugLog("init: " + m_block.DisplayNameText);
-			m_optionsTerminal_ev = new EntityValue<Option>(block, 0, UpdateVisual);
+			Log.DebugLog("init: " + m_block.DisplayNameText);
 
 			Registrar.Add(block, this);
 		}
@@ -207,22 +143,9 @@ namespace Rynchodon.AntennaRelay
 			this.m_optionsTerminal = (Option)builder.Options;
 		}
 
-		public Builder_TextPanel GetBuilder()
-		{
-			// do not save if default
-			if (m_optionsTerminal == Option.None)
-				return null;
-
-			return new Builder_TextPanel()
-			{
-				BlockId = m_block.EntityId,
-				Options = (byte)m_optionsTerminal
-			};
-		}
-
 		protected override bool ParseAll(string instructions)
 		{
-			string[] opts = instructions.RemoveWhitespace().Split(Static.OptionsSeparators);
+			string[] opts = instructions.RemoveWhitespace().Split(OptionsSeparators);
 			m_options = Option.None;
 			foreach (string opt in opts)
 			{
@@ -265,7 +188,7 @@ namespace Rynchodon.AntennaRelay
 			if (entityIds != null)
 				UpdateInstructions();
 
-			//myLogger.debugLog("Building display list", "Display()", Logger.severity.TRACE);
+			//Log.DebugLog("Building display list", "Display()", Logger.severity.TRACE);
 
 			RelayStorage store = m_networkClient.GetStorage();
 			if (store == null)
@@ -284,6 +207,8 @@ namespace Rynchodon.AntennaRelay
 			if (m_sortableList.Count == 0)
 			{
 				m_textPanel.WritePublicText("No entities detected");
+				m_sortableList.Clear();
+				ResourcePool<List<sortableLastSeen>>.Return(m_sortableList);
 				return;
 			}
 
@@ -307,7 +232,7 @@ namespace Rynchodon.AntennaRelay
 
 			string displayString = displayText.ToString();
 
-			//myLogger.debugLog("Writing to panel: " + m_textPanel.DisplayNameText + ":\n\t" + displayString, "Display()", Logger.severity.TRACE);
+			//Log.DebugLog("Writing to panel: " + m_textPanel.DisplayNameText + ":\n\t" + displayString, "Display()", Logger.severity.TRACE);
 			m_textPanel.WritePublicText(displayText.ToString());
 		}
 
@@ -322,7 +247,7 @@ namespace Rynchodon.AntennaRelay
 
 				ExtensionsRelations.Relations relations = m_block.getRelationsTo(seen.Entity, ExtensionsRelations.Relations.Enemy).highestPriority();
 				m_sortableList.Add(new sortableLastSeen(myPos, seen, relations, m_options));
-				//myLogger.debugLog("item: " + seen.Entity.getBestName() + ", relations: " + relations, "Display()");
+				//Log.DebugLog("item: " + seen.Entity.getBestName() + ", relations: " + relations, "Display()");
 			});
 		}
 
@@ -337,14 +262,14 @@ namespace Rynchodon.AntennaRelay
 				{
 					ExtensionsRelations.Relations relations = m_block.getRelationsTo(seen.Entity, ExtensionsRelations.Relations.Enemy).highestPriority();
 					m_sortableList.Add(new sortableLastSeen(myPos, seen, relations, m_options));
-					//myLogger.debugLog("item: " + seen.Entity.getBestName() + ", relations: " + relations, "Display_FromProgram()");
+					//Log.DebugLog("item: " + seen.Entity.getBestName() + ", relations: " + relations, "Display_FromProgram()");
 				}
 			}
 		}
 
 		private void DisplyAutopilotStatus()
 		{
-			//myLogger.debugLog("Building autopilot list", "DisplyAutopilotStatus()", Logger.severity.TRACE);
+			//Log.DebugLog("Building autopilot list", "DisplyAutopilotStatus()", Logger.severity.TRACE);
 
 			RelayStorage store = m_networkClient.GetStorage();
 			if (store == null)
@@ -391,7 +316,7 @@ namespace Rynchodon.AntennaRelay
 
 			string displayString = displayText.ToString();
 
-			//myLogger.debugLog("Writing to panel: " + m_textPanel.DisplayNameText + ":\n\t" + displayString, "DisplyAutopilotStatus()", Logger.severity.TRACE);
+			//Log.DebugLog("Writing to panel: " + m_textPanel.DisplayNameText + ":\n\t" + displayString, "DisplyAutopilotStatus()", Logger.severity.TRACE);
 			m_textPanel.WritePublicText(displayText.ToString());
 		}
 
@@ -533,14 +458,14 @@ namespace Rynchodon.AntennaRelay
 
 			public int CompareTo(SortableAutopilot other)
 			{
-				if (this.Autopilot.m_autopilotStatus.Value == other.Autopilot.m_autopilotStatus.Value)
+				if (this.Autopilot.m_autopilotStatus == other.Autopilot.m_autopilotStatus)
 				{
-					Static.s_logger.debugLog("same status: " + this.Autopilot.m_autopilotStatus.Value);
+					Logger.DebugLog("same status: " + this.Autopilot.m_autopilotStatus);
 					return this.DistanceSquared.CompareTo(other.DistanceSquared);
 				}
 
-				Static.s_logger.debugLog("diff status: " + this.Autopilot.m_autopilotStatus.Value + " vs " + other.Autopilot.m_autopilotStatus.Value + ", diff: " + ((int)other.Autopilot.m_autopilotStatus.Value - (int)this.Autopilot.m_autopilotStatus.Value));
-				return (int)other.Autopilot.m_autopilotStatus.Value - (int)this.Autopilot.m_autopilotStatus.Value;
+				Logger.DebugLog("diff status: " + this.Autopilot.m_autopilotStatus + " vs " + other.Autopilot.m_autopilotStatus + ", diff: " + ((int)other.Autopilot.m_autopilotStatus - (int)this.Autopilot.m_autopilotStatus));
+				return (int)other.Autopilot.m_autopilotStatus - (int)this.Autopilot.m_autopilotStatus;
 			}
 
 		}

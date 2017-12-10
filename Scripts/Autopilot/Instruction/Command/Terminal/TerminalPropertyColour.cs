@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Text;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
@@ -32,7 +31,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		protected override void AddValueControl(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-			IMyTerminalControlColor colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, IMyShipController>("ColourValue");
+			IMyTerminalControlColor colour = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlColor, Sandbox.ModAPI.Ingame.IMyShipController>("ColourValue");
 			colour.Title = MyStringId.GetOrCompute("Value");
 			colour.Tooltip = MyStringId.GetOrCompute("Value to set propety to");
 			colour.Getter = (block) => m_value;
@@ -42,15 +41,11 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			};
 			controls.Add(colour);
 
-            IMyTerminalControlSlider alpha = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyShipController>("AlphaChannel");
-            alpha.Title = MyStringId.GetOrCompute("A");
-            alpha.Tooltip = MyStringId.NullOrEmpty;
-			//alpha.DefaultValue = 255f;
-			//alpha.Normalizer = Normalizer;
-			//alpha.Denormalizer = Denormalizer;
-            alpha.SetDualLogLimits(0f, 255f, 255f);
-
-            alpha.Writer = (block, sb) => sb.Append(m_value.A);
+			MyTerminalControlSlider<MyShipController> alpha = new MyTerminalControlSlider<MyShipController>("AlphaChannel", MyStringId.GetOrCompute("A"), MyStringId.NullOrEmpty);
+			alpha.DefaultValue = 255f;
+			alpha.Normalizer = Normalizer;
+			alpha.Denormalizer = Denormalizer;
+			alpha.Writer = (block, sb) => sb.Append(m_value.A);
 			IMyTerminalValueControl<float> valueControl = alpha;
 			valueControl.Getter = block => m_value.A;
 			valueControl.Setter = (block, value) => {
@@ -61,7 +56,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			controls.Add(alpha);
 		}
 
-		protected override System.Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			string[] split = command.Split(',');
 			if (split.Length != 3)

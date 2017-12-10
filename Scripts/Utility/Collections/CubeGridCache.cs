@@ -1,353 +1,31 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using VRage;
+using VRage.Game;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
+using VRage.Utils;
+using System.Linq;
+using VRageMath;
+using Rynchodon.Utility;
+using Rynchodon.Utility.Vectors;
+using VRage.Game.Entity;
+using Sandbox.Game.Entities.Cube;
+using VRage.Collections;
 
 namespace Rynchodon
 {
 	/// <summary>
 	/// A better way to get cube blocks of type from a grid.
 	/// </summary>
-	/// TODO: re-write to separate blocks by subtype id
 	public class CubeGridCache
 	{
 
-		private class AllBlocksEnumerator : IEnumerator<IMyCubeBlock> 
-		{
-			private Dictionary<MyObjectBuilderType, ListSnapshots<IMyCubeBlock>> m_dictionary;
-			private FastResourceLock m_fastLock;
-
-			private IEnumerator<ListSnapshots<IMyCubeBlock>> m_dictEnumerator;
-			private IEnumerator<IMyCubeBlock> value_snapshotEnumerator;
-
-			private IEnumerator<IMyCubeBlock> m_snapshotEnumerator
-			{
-				get { return value_snapshotEnumerator; }
-				set
-				{
-					if (value_snapshotEnumerator == value)
-						return;
-					if (value_snapshotEnumerator != null)
-						value_snapshotEnumerator.Dispose();
-					value_snapshotEnumerator = value;
-				}
-			}
-
-			public AllBlocksEnumerator(Dictionary<MyObjectBuilderType, ListSnapshots<IMyCubeBlock>> dict, FastResourceLock fastLock)
-			{
-				this.m_fastLock = fastLock;
-				this.m_dictionary = dict;
-				fastLock.AcquireSharedUsing();
-				m_dictEnumerator = m_dictionary.Values.GetEnumerator();
-			}
-
-			~AllBlocksEnumerator()
-			{
-				Dispose();
-			}
-
-			#region IEnumerator<IMyCubeBlock> Members
-
-			public IMyCubeBlock Current
-			{
-				get { return m_snapshotEnumerator == null ? null : m_snapshotEnumerator.Current; }
-			}
-
-			#endregion
-
-			#region IDisposable Members
-
-			public void Dispose()
-			{
-				if (m_fastLock == null)
-					return;
-				FastResourceLock fastLock = m_fastLock;
-				m_fastLock = null;
-				m_dictionary = null;
-				m_dictEnumerator.Dispose();
-				m_dictEnumerator = null;
-				m_snapshotEnumerator = null;
-				fastLock.ReleaseShared();
-			}
-
-			#endregion
-
-			#region IEnumerator Members
-
-			object System.Collections.IEnumerator.Current
-			{
-				get { return Current; }
-			}
-
-			public bool MoveNext()
-			{
-				if (m_snapshotEnumerator != null && m_snapshotEnumerator.MoveNext())
-					return true;
-
-				if (m_dictEnumerator.MoveNext())
-				{
-					m_snapshotEnumerator = m_dictEnumerator.Current.myList.GetEnumerator();
-					if (m_snapshotEnumerator.MoveNext())
-						return true;
-					return MoveNext();
-				}
-				else
-					return false;
-			}
-
-			public void Reset()
-			{
-				m_dictEnumerator.Reset();
-				m_snapshotEnumerator = null;
-			}
-
-			#endregion
-
-			public IEnumerator<IMyCubeBlock> GetEnumerator()
-			{
-				return this;
-			}
-		}
-
 		private static FastResourceLock lock_constructing = new FastResourceLock();
-		public static LockedDictionary<string, MyObjectBuilderType> DefinitionType = new LockedDictionary<string, MyObjectBuilderType>();
-
-		static CubeGridCache()
-		{
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
-		}
-
-		private static void Entities_OnCloseAll()
-		{
-			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
-			lock_constructing = null;
-			DefinitionType = null;
-		}
-
-		//[Obsolete("Use BlockTypeList constructor")]
-		public static BlockTypeList GetBlockList(string[] blockNamesContain)
-		{
-			return new BlockTypeList(blockNamesContain);
-		}
-
-		private readonly Logger myLogger;
-		private Dictionary<MyObjectBuilderType, ListSnapshots<IMyCubeBlock>> CubeBlocks_Type = new Dictionary<MyObjectBuilderType, ListSnapshots<IMyCubeBlock>>();
-		private FastResourceLock lock_CubeBlocks = new FastResourceLock();
-
-		private readonly IMyCubeGrid CubeGrid;
-
-		public int TerminalBlocks { get; private set; }
-
-		private CubeGridCache(IMyCubeGrid grid)
-		{
-			myLogger = new Logger(() => grid.DisplayName);
-			CubeGrid = grid;
-			List<IMySlimBlock> allSlims = new List<IMySlimBlock>();
-			CubeGrid.GetBlocks_Safe(allSlims, slim => slim.FatBlock != null);
-
-			foreach (IMySlimBlock slim in allSlims)
-				CubeGrid_OnBlockAdded(slim);
-
-			CubeGrid.OnBlockAdded += CubeGrid_OnBlockAdded;
-			CubeGrid.OnBlockRemoved += CubeGrid_OnBlockRemoved;
-			CubeGrid.OnClosing += CubeGrid_OnClosing;
-
-			Registrar.Add(CubeGrid, this);
-			myLogger.debugLog("built for: " + CubeGrid.DisplayName, Logger.severity.DEBUG);
-		}
-
-		private void CubeGrid_OnClosing(IMyEntity grid)
-		{
-			CubeGrid.OnBlockAdded -= CubeGrid_OnBlockAdded;
-			CubeGrid.OnBlockRemoved -= CubeGrid_OnBlockRemoved;
-			CubeGrid.OnClosing -= CubeGrid_OnClosing;
-
-			myLogger.debugLog("closing", Logger.severity.DEBUG);
-
-			using (lock_CubeBlocks.AcquireExclusiveUsing())
-				CubeBlocks_Type = null;
-
-			myLogger.debugLog("closed", Logger.severity.DEBUG);
-		}
-
-		private void CubeGrid_OnBlockAdded(IMySlimBlock obj)
-		{
-			IMyCubeBlock fatblock = obj.FatBlock;
-			if (fatblock == null)
-				return;
-
-			lock_CubeBlocks.AcquireExclusive();
-			try
-			{
-				// by type
-				MyObjectBuilderType myOBtype = fatblock.BlockDefinition.TypeId;
-				ListSnapshots<IMyCubeBlock> setBlocks_Type;
-				if (!CubeBlocks_Type.TryGetValue(myOBtype, out setBlocks_Type))
-				{
-					setBlocks_Type = new ListSnapshots<IMyCubeBlock>();
-					CubeBlocks_Type.Add(myOBtype, setBlocks_Type);
-				}
-				setBlocks_Type.mutable().Add(fatblock);
-
-				// by definition
-				IMyTerminalBlock asTerm = fatblock as IMyTerminalBlock;
-				if (asTerm == null)
-					return;
-
-				DefinitionType.TrySet(asTerm.DefinitionDisplayNameText, myOBtype);
-				TerminalBlocks++;
-			}
-			catch (Exception e) { myLogger.alwaysLog("Exception: " + e, Logger.severity.ERROR); }
-			finally { lock_CubeBlocks.ReleaseExclusive(); }
-		}
-
-		private void CubeGrid_OnBlockRemoved(IMySlimBlock obj)
-		{
-			IMyCubeBlock fatblock = obj.FatBlock;
-			if (fatblock == null)
-				return;
-
-			myLogger.debugLog("block removed: " + obj.getBestName());
-			myLogger.debugLog("block removed: " + obj.FatBlock.DefinitionDisplayNameText + "/" + obj.getBestName());
-			lock_CubeBlocks.AcquireExclusive();
-			try
-			{
-				// by type
-				MyObjectBuilderType myOBtype = fatblock.BlockDefinition.TypeId;
-				ListSnapshots<IMyCubeBlock> setBlocks_Type;
-				if (!CubeBlocks_Type.TryGetValue(myOBtype, out setBlocks_Type))
-				{
-					myLogger.debugLog("failed to get list of type: " + myOBtype);
-					return;
-				}
-				if (setBlocks_Type.Count == 1)
-					CubeBlocks_Type.Remove(myOBtype);
-				else
-					setBlocks_Type.mutable().Remove(fatblock);
-
-				// by definition
-				IMyTerminalBlock asTerm = obj.FatBlock as IMyTerminalBlock;
-				if (asTerm != null)
-					TerminalBlocks--;
-			}
-			catch (Exception e) { myLogger.alwaysLog("Exception: " + e, Logger.severity.ERROR); }
-			finally { lock_CubeBlocks.ReleaseExclusive(); }
-			myLogger.debugLog("leaving CubeGrid_OnBlockRemoved(): " + obj.getBestName());
-		}
-
-		/// <returns>an immutable read only list or null if there are no blocks of type T</returns>
-		public ReadOnlyList<IMyCubeBlock> GetBlocksOfType(MyObjectBuilderType objBuildType)
-		{
-			//myLogger.debugLog("looking up type " + objBuildType, "GetBlocksOfType<T>()");
-			using (lock_CubeBlocks.AcquireSharedUsing())
-			{
-				if (CubeBlocks_Type == null)
-					return null;
-				ListSnapshots<IMyCubeBlock> value;
-				if (CubeBlocks_Type.TryGetValue(objBuildType, out value))
-					return value.immutable();
-				return null;
-			}
-		}
-
-		/// <summary>
-		/// Return the number of blocks of the given type.
-		/// </summary>
-		/// <param name="objBuildType">Type to search for</param>
-		/// <returns>The number of blocks of the given type</returns>
-		public int CountByType(MyObjectBuilderType objBuildType)
-		{
-			lock_CubeBlocks.AcquireShared();
-			try
-			{
-				ListSnapshots<IMyCubeBlock> value;
-				if (CubeBlocks_Type.TryGetValue(objBuildType, out value))
-					return value.Count;
-				return 0;
-			}
-			finally { lock_CubeBlocks.ReleaseShared(); }
-		}
-
-		/// <summary>
-		/// Count the number of blocks that match a particular condition.
-		/// </summary>
-		/// <param name="objBuildType">Type to search for</param>
-		/// <param name="condition">Condition that block must match</param>
-		/// <returns>The number of blocks of the given type that match the condition.</returns>
-		public int CountByType(MyObjectBuilderType objBuildType, Func<IMyCubeBlock, bool> condition, int stopCaringAt = int.MaxValue)
-		{
-			using (lock_CubeBlocks.AcquireSharedUsing())
-			{
-				ListSnapshots<IMyCubeBlock> value;
-				if (CubeBlocks_Type.TryGetValue(objBuildType, out value))
-				{
-					int count = 0;
-					foreach (IMyCubeBlock block in value.myList)
-						if (condition(block))
-						{
-							count++;
-							if (count >= stopCaringAt)
-								return count;
-						}
-
-					return count;
-				}
-				return 0;
-			}
-		}
-
-		/// <summary>
-		/// Return the total number of blocks cached by type.
-		/// </summary>
-		/// <returns>The total number of blocks cached by type</returns>
-		public int TotalByType()
-		{
-			lock_CubeBlocks.AcquireShared();
-			try
-			{
-				int count = 0;
-				foreach (var byType in CubeBlocks_Type)
-					count += byType.Value.Count;
-				return count;
-			}
-			finally { lock_CubeBlocks.ReleaseShared(); }
-		}
-
-		public IEnumerable<IMyCubeBlock> AllCubeBlocks()
-		{
-			foreach (IMyCubeBlock block in new AllBlocksEnumerator(CubeBlocks_Type, lock_CubeBlocks))
-				yield return block;
-		}
-
-		public static IEnumerable<IMyCubeBlock> AllCubeBlocks(IMyCubeGrid grid)
-		{
-			CubeGridCache cache = GetFor(grid);
-			if (cache == null)
-				return new IMyCubeBlock[] { }; // fail silently
-
-			return cache.AllCubeBlocks();
-		}
-
-		public IEnumerable<IMyCubeBlock> OneOfEachCubeBlock()
-		{
-			using (lock_CubeBlocks.AcquireSharedUsing())
-				foreach (var list in CubeBlocks_Type.Values)
-					if (list.Count != 0)
-						yield return list.myList[0];
-		}
-
-		public static IEnumerable<IMyCubeBlock> OneOfEachCubeBlock(IMyCubeGrid grid)
-		{
-			CubeGridCache cache = GetFor(grid);
-			if (cache == null)
-				yield break;
-
-			foreach (IMyCubeBlock block in cache.OneOfEachCubeBlock())
-				yield return block;
-		}
+		public static LockedDictionary<MyDefinitionId, string> DefinitionType = new LockedDictionary<MyDefinitionId, string>();
 
 		/// <summary>
 		/// will return null if grid is closed or CubeGridCache cannot be created
@@ -358,8 +36,8 @@ namespace Rynchodon
 				return null;
 
 			CubeGridCache value;
-				if(	Registrar.TryGetValue(grid.EntityId, out value))
-					return value;
+			if (Registrar.TryGetValue(grid.EntityId, out value))
+				return value;
 
 			using (lock_constructing.AcquireExclusiveUsing())
 			{
@@ -374,6 +52,359 @@ namespace Rynchodon
 					return null;
 				}
 			}
+		}
+
+		public readonly IMyCubeGrid CubeGrid;
+
+		private Dictionary<MyObjectBuilderType, List<MySlimBlock>> CubeBlocks = new Dictionary<MyObjectBuilderType, List<MySlimBlock>>();
+		private FastResourceLock lock_blocks = new FastResourceLock();
+
+		public int CellCount { get; private set; }
+		public int TerminalBlocks { get; private set; }
+
+		private Logable Log { get { return new Logable(CubeGrid); } }
+
+		private CubeGridCache(IMyCubeGrid grid)
+		{
+			CubeGrid = grid;
+			List<IMySlimBlock> allSlims = new List<IMySlimBlock>();
+			CubeGrid.GetBlocks_Safe(allSlims);
+
+			using (lock_blocks.AcquireExclusiveUsing())
+				foreach (IMySlimBlock slim in allSlims)
+					Add(slim);
+
+			CubeGrid.OnBlockAdded += CubeGrid_OnBlockAdded;
+			CubeGrid.OnBlockRemoved += CubeGrid_OnBlockRemoved;
+			CubeGrid.OnClosing += CubeGrid_OnClosing;
+
+			Registrar.Add(CubeGrid, this);
+			Log.DebugLog("built for: " + CubeGrid.DisplayName, Logger.severity.DEBUG);
+		}
+
+		private void CubeGrid_OnClosing(IMyEntity grid)
+		{
+			CubeGrid.OnBlockAdded -= CubeGrid_OnBlockAdded;
+			CubeGrid.OnBlockRemoved -= CubeGrid_OnBlockRemoved;
+			CubeGrid.OnClosing -= CubeGrid_OnClosing;
+		}
+
+		private void CubeGrid_OnBlockAdded(IMySlimBlock obj)
+		{
+			lock_blocks.AcquireExclusive();
+			try { Add(obj); }
+			catch (Exception e) { Log.AlwaysLog("Exception: " + e, Logger.severity.ERROR); }
+			finally { lock_blocks.ReleaseExclusive(); }
+		}
+
+		private void Add(IMySlimBlock obj, bool fromAddInitialized = false)
+		{
+			MySlimBlock block = (MySlimBlock)obj;
+			MyObjectBuilderType typeId = block.BlockDefinition.Id.TypeId;
+			List<MySlimBlock> blockList;
+			if (!CubeBlocks.TryGetValue(typeId, out blockList))
+			{
+				blockList = new List<MySlimBlock>();
+				CubeBlocks.Add(typeId, blockList);
+			}
+			Log.DebugLog("already in blockList: " + obj.nameWithId(), Logger.severity.ERROR, condition: blockList.Contains(block));
+			blockList.Add(block);
+
+			IMyTerminalBlock term = block.FatBlock as IMyTerminalBlock;
+			if (term != null)
+			{
+				if (DefinitionType.TrySet(((MyCubeBlock)term).BlockDefinition.Id, term.DefinitionDisplayNameText))
+					Log.DebugLog("new type: " + term.DefinitionDisplayNameText, Logger.severity.DEBUG);
+				TerminalBlocks++;
+			}
+
+			Vector3I cellSize = block.Max - block.Min + 1;
+			CellCount += cellSize.X * cellSize.Y * cellSize.Z;
+		}
+
+		private void CubeGrid_OnBlockRemoved(IMySlimBlock obj)
+		{
+			lock_blocks.AcquireExclusive();
+			try
+			{
+				MySlimBlock block = (MySlimBlock)obj;
+				MyObjectBuilderType typeId = block.BlockDefinition.Id.TypeId;
+				List<MySlimBlock> blockList;
+				if (!CubeBlocks.TryGetValue(typeId, out blockList))
+				{
+					Log.DebugLog("failed to get list of type: " + typeId, Logger.severity.WARNING);
+					return;
+				}
+				if (!blockList.Remove(block))
+				{
+					Log.DebugLog("already removed: " + obj.nameWithId(), Logger.severity.WARNING);
+					return;
+				}
+
+				Log.DebugLog("block removed: " + obj.nameWithId(), Logger.severity.TRACE);
+				//Logger.DebugNotify("block removed: " + obj.getBestName(), level: Logger.severity.TRACE);
+
+				if (blockList.Count == 0)
+					CubeBlocks.Remove(typeId);
+				if (block.FatBlock is IMyTerminalBlock)
+					TerminalBlocks--;
+
+				Vector3I cellSize = block.Max - block.Min + 1;
+				CellCount -= cellSize.X * cellSize.Y * cellSize.Z;
+			}
+			catch (Exception e) { Log.AlwaysLog("Exception: " + e, Logger.severity.ERROR); }
+			finally { lock_blocks.ReleaseExclusive(); }
+		}
+
+		public IEnumerable<MyCubeBlock> BlocksOfType(MyObjectBuilderType typeId)
+		{
+			lock_blocks.AcquireShared();
+			try
+			{
+				List<MySlimBlock> blockList;
+				if (CubeBlocks.TryGetValue(typeId, out blockList))
+					for (int i = blockList.Count - 1; i >= 0; i--)
+					{
+						MyCubeBlock cubeBlock = blockList[i].FatBlock;
+						if (cubeBlock != null)
+							yield return cubeBlock;
+					}
+			}
+			finally
+			{
+				lock_blocks.ReleaseShared();
+			}
+		}
+
+		public IEnumerable<MySlimBlock> SlimBlocksOfType(MyObjectBuilderType typeId)
+		{
+			lock_blocks.AcquireShared();
+			try
+			{
+				List<MySlimBlock> blockList;
+				if (CubeBlocks.TryGetValue(typeId, out blockList))
+					for (int i = blockList.Count - 1; i >= 0; i--)
+						yield return blockList[i];
+			}
+			finally
+			{
+				lock_blocks.ReleaseShared();
+			}
+		}
+
+		public IEnumerable<MyCubeBlock> BlocksOfType(MyDefinitionId defId)
+		{
+			lock_blocks.AcquireShared();
+			try
+			{
+				List<MySlimBlock> blockList;
+				if (CubeBlocks.TryGetValue(defId.TypeId, out blockList))
+					for (int i = blockList.Count - 1; i >= 0; i--)
+					{
+						MySlimBlock block = blockList[i];
+						MyCubeBlock cubeBlock = block.FatBlock;
+						if (cubeBlock != null && !cubeBlock.Closed && block.BlockDefinition.Id.SubtypeId == defId.SubtypeId)
+							yield return cubeBlock;
+					}
+			}
+			finally
+			{
+				lock_blocks.ReleaseShared();
+			}
+		}
+
+		public IEnumerable<MySlimBlock> SlimBlocksOfType(MyDefinitionId defId)
+		{
+			lock_blocks.AcquireShared();
+			try
+			{
+				List<MySlimBlock> blockList;
+				if (CubeBlocks.TryGetValue(defId.TypeId, out blockList))
+					for (int i = blockList.Count - 1; i >= 0; i--)
+					{
+						MySlimBlock block = blockList[i];
+						if (!block.Closed() && block.BlockDefinition.Id.SubtypeId == defId.SubtypeId)
+							yield return block;
+					}
+			}
+			finally
+			{
+				lock_blocks.ReleaseShared();
+			}
+		}
+
+		public IEnumerable<MyCubeBlock> AllCubeBlocks()
+		{
+			lock_blocks.AcquireShared();
+			try
+			{
+				foreach (List<MySlimBlock> blockList in CubeBlocks.Values)
+					for (int i = blockList.Count - 1; i >= 0; i--)
+					{
+						MyCubeBlock cubeBlock = blockList[i].FatBlock;
+						if (cubeBlock != null)
+							yield return cubeBlock;
+					}
+			}
+			finally
+			{
+				lock_blocks.ReleaseShared();
+			}
+		}
+
+		public IEnumerable<IMySlimBlock> AllSlimBlocks()
+		{
+			lock_blocks.AcquireShared();
+			try
+			{
+				foreach (List<MySlimBlock> blockList in CubeBlocks.Values)
+					for (int i = blockList.Count - 1; i >= 0; i--)
+						yield return blockList[i];
+			}
+			finally
+			{
+				lock_blocks.ReleaseShared();
+			}
+		}
+
+		/// <summary>
+		/// For every block in the grid, yields every cell from MySlimBlock.Min to MySlimBlock.Max, inclusive.
+		/// </summary>
+		public IEnumerable<Vector3I> OccupiedCells()
+		{
+			lock_blocks.AcquireShared();
+			try
+			{
+				foreach (List<MySlimBlock> blockList in CubeBlocks.Values)
+				{
+					for (int i = blockList.Count - 1; i >= 0; i--)
+					{
+						MySlimBlock slim = blockList[i];
+						if (slim.Closed())
+						{
+							Log.DebugLog("is closed: " + slim); // rare if blocks are being removed correctly
+							continue;
+						}
+						Vector3I cell;
+						for (cell.X = slim.Min.X; cell.X <= slim.Max.X; cell.X++)
+							for (cell.Y = slim.Min.Y; cell.Y <= slim.Max.Y; cell.Y++)
+								for (cell.Z = slim.Min.Z; cell.Z <= slim.Max.Z; cell.Z++)
+									yield return cell;
+					}
+				}
+			}
+			finally
+			{
+				lock_blocks.ReleaseShared();
+			}
+		}
+
+		public int CountByType(MyObjectBuilderType typeId)
+		{
+			lock_blocks.AcquireShared();
+			try
+			{
+				List<MySlimBlock> blockList;
+				if (CubeBlocks.TryGetValue(typeId, out blockList))
+					return blockList.Count;
+				else
+					return 0;
+			}
+			finally
+			{
+				lock_blocks.ReleaseShared();
+			}
+		}
+
+		public int CountByType(MyDefinitionId defId)
+		{
+			int count = 0;
+			lock_blocks.AcquireShared();
+			try
+			{
+				List<MySlimBlock> blockList;
+				if (CubeBlocks.TryGetValue(defId.TypeId, out blockList))
+					for (int i = blockList.Count - 1; i >= 0; i--)
+					{
+						MySlimBlock block = blockList[i];
+						if (!block.Closed() && block.BlockDefinition.Id.SubtypeId == defId.SubtypeId)
+							count++;
+					}
+			}
+			finally
+			{
+				lock_blocks.ReleaseShared();
+			}
+			return count;
+		}
+
+		/// <summary>
+		/// Count the number of blocks that match a particular condition.
+		/// </summary>
+		/// <param name="objBuildType">Type to search for</param>
+		/// <param name="condition">Condition that block must match</param>
+		/// <returns>The number of blocks of the given type that match the condition.</returns>
+		public int CountByType(MyObjectBuilderType objBuildType, Func<IMyCubeBlock, bool> condition, int stopCaringAt = int.MaxValue)
+		{
+			lock_blocks.AcquireShared();
+			try
+			{
+				List<MySlimBlock> blockList;
+				if (CubeBlocks.TryGetValue(objBuildType, out blockList))
+				{
+					int count = 0;
+					foreach (MySlimBlock block in blockList)
+					{
+						MyCubeBlock cubeBlock = block.FatBlock;
+						if (cubeBlock != null && condition(cubeBlock))
+						{
+							count++;
+							if (count >= stopCaringAt)
+								return count;
+						}
+					}
+
+					return count;
+				}
+				return 0;
+			}
+			finally
+			{
+				lock_blocks.ReleaseShared();
+			}
+		}
+
+		/// <summary>
+		/// Gets the closest occupied cell.
+		/// </summary>
+		public Vector3I GetClosestOccupiedCell(Vector3I startCell, Vector3I previousCell)
+		{
+			Vector3I closestCell = previousCell;
+			int closestDistance = CubeGrid.GetCubeBlock(closestCell) != null ? previousCell.DistanceSquared(startCell) - 2 : int.MaxValue;
+
+			CubeGridCache cache = CubeGridCache.GetFor(CubeGrid);
+			if (cache == null)
+				return closestCell;
+
+			foreach (Vector3I cell in cache.OccupiedCells())
+			{
+				int dist = cell.DistanceSquared(startCell);
+				if (dist < closestDistance)
+				{
+					closestCell = cell;
+					closestDistance = dist;
+				}
+			}
+
+			return closestCell;
+		}
+
+		/// <summary>
+		/// Gets the closest occupied cell.
+		/// </summary>
+		public Vector3I GetClosestOccupiedCell(Vector3D startWorld, Vector3I previousCell)
+		{
+			return GetClosestOccupiedCell(CubeGrid.WorldToGridInteger(startWorld), previousCell);
 		}
 
 	}

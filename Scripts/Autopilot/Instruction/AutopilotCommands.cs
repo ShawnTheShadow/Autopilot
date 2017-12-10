@@ -1,8 +1,12 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using Rynchodon.Autopilot.Instruction.Command;
+using Rynchodon.Utility;
+using Sandbox.Game.Entities;
+using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using VRage.Game.ModAPI;
@@ -11,10 +15,10 @@ using VRage.Utils;
 
 namespace Rynchodon.Autopilot.Instruction
 {
-    /// <summary>
-    /// GUI programming and command interpretation.
-    /// </summary>
-    public class AutopilotCommands
+	/// <summary>
+	/// GUI programming and command interpretation.
+	/// </summary>
+	public class AutopilotCommands
 	{
 
 		private class StaticVariables
@@ -29,10 +33,6 @@ namespace Rynchodon.Autopilot.Instruction
 
 		static AutopilotCommands()
 		{
-			Logger.SetFileName("AutopilotCommands");
-
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
-
 			List<AddCommandInternalNode> rootCommands = new List<AddCommandInternalNode>();
 
 			// fly somewhere
@@ -71,6 +71,7 @@ namespace Rynchodon.Autopilot.Instruction
 			AddDummy(new LandVoxel(), commands);
 			AddDummy(new Orbit(), commands);
 			AddDummy(new NavigationBlock(), commands);
+			AddDummy(new FaceMove(), commands);
 
 			rootCommands.Add(new AddCommandInternalNode("Tasks", commands.ToArray()));
 
@@ -80,6 +81,7 @@ namespace Rynchodon.Autopilot.Instruction
 
 			AddDummy(new Proximity(), commands);
 			AddDummy(new SpeedLimit(), commands);
+			AddDummy(new Jump(), commands);
 			AddDummy(new StraightLine(), commands);
 			AddDummy(new Asteroid(), commands);
 
@@ -94,6 +96,7 @@ namespace Rynchodon.Autopilot.Instruction
 			AddDummy(new Exit(), commands);
 			AddDummy(new Stop(), commands);
 			AddDummy(new Disable(), commands);
+			AddDummy(new WaitForBatteryRecharge(), commands);
 
 			rootCommands.Add(new AddCommandInternalNode("Flow Control", commands.ToArray()));
 
@@ -109,12 +112,6 @@ namespace Rynchodon.Autopilot.Instruction
 			rootCommands.Add(new AddCommandInternalNode("Terminal", commands.ToArray()));
 
 			Static.addCommandRoot = new AddCommandInternalNode("root", rootCommands.ToArray());
-		}
-
-		private static void Entities_OnCloseAll()
-		{
-			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
-			Static = null;
 		}
 
 		private static void AddDummy(ACommand command, string idOrAlias)
@@ -179,7 +176,6 @@ namespace Rynchodon.Autopilot.Instruction
 		private readonly IMyTerminalBlock m_block;
 		/// <summary>Command list for GUI programming, not to be used by others</summary>
 		private readonly List<ACommand> m_commandList = new List<ACommand>();
-		private readonly Logger m_logger;
 
 		/// <summary>Shared from any command source</summary>
 		private readonly StringBuilder m_syntaxErrors = new StringBuilder();
@@ -193,6 +189,8 @@ namespace Rynchodon.Autopilot.Instruction
 		private Stack<AddCommandInternalNode> m_currentAddNode = new Stack<AddCommandInternalNode>();
 		private string m_infoMessage, m_commands;
 
+		private Logable Log { get { return new Logable(m_block); } }
+
 		/// <summary>
 		/// The most recent commands from either terminal or a message.
 		/// </summary>
@@ -202,7 +200,7 @@ namespace Rynchodon.Autopilot.Instruction
 			private set
 			{
 				m_commands = value;
-				m_logger.alwaysLog("Commands: " + m_commands); // for bug reports
+				Log.AlwaysLog("Commands: " + m_commands); // for bug reports
 			}
 		}
 
@@ -211,7 +209,6 @@ namespace Rynchodon.Autopilot.Instruction
 		private AutopilotCommands(IMyTerminalBlock block)
 		{
 			this.m_block = block;
-			this.m_logger = new Logger(block);
 
 			m_block.AppendingCustomInfo += m_block_AppendSyntaxErrors;
 
@@ -223,12 +220,13 @@ namespace Rynchodon.Autopilot.Instruction
 		/// </summary>
 		public void OnCommandsChanged()
 		{
+			Log.DebugLog("entered");
 			m_actionList.Clear();
 		}
 
 		public void StartGooeyProgramming()
 		{
-			m_logger.debugLog("entered");
+			Log.DebugLog("entered");
 
 			using (MainLock.AcquireSharedUsing())
 			{
@@ -237,16 +235,15 @@ namespace Rynchodon.Autopilot.Instruction
 				m_commandList.Clear();
 				m_syntaxErrors.Clear();
 
-				//MyTerminalControls.Static.CustomControlGetter += CustomControlGetter;
-                MyAPIGateway.TerminalControls.CustomControlGetter += CustomControlGetter;
+				MyTerminalControls.Static.CustomControlGetter += CustomControlGetter;
 				m_block.AppendingCustomInfo += m_block_AppendingCustomInfo;
 
 				Commands = AutopilotTerminal.GetAutopilotCommands(m_block).ToString();
 				foreach (ACommand comm in ParseCommands(Commands))
 					m_commandList.Add(comm);
 				if (m_syntaxErrors.Length != 0)
-					m_block.RefreshCustomInfo();
-				m_block.SwitchTerminalTo();
+					m_block.UpdateCustomInfo();
+				m_block.RebuildControls();
 			}
 		}
 
@@ -265,7 +262,7 @@ namespace Rynchodon.Autopilot.Instruction
 				List<ACommand> commands = new List<ACommand>();
 				GetActions(Commands, m_actionList);
 				if (m_syntaxErrors.Length != 0)
-					m_block.RefreshCustomInfo();
+					m_block.UpdateCustomInfo();
 				return m_actionList;
 			}
 		}
@@ -280,7 +277,7 @@ namespace Rynchodon.Autopilot.Instruction
 				AutopilotActionList actList = new AutopilotActionList();
 				GetActions(Commands, actList);
 				if (m_syntaxErrors.Length != 0)
-					m_block.RefreshCustomInfo();
+					m_block.UpdateCustomInfo();
 				return actList;
 			}
 		}
@@ -377,95 +374,42 @@ namespace Rynchodon.Autopilot.Instruction
 
 				actionList.Add(textPanelMonitor);
 			}
+
+			actionList.Reset();
 		}
 
 		private void CustomControlGetter(IMyTerminalBlock block, List<IMyTerminalControl> controls)
 		{
-            //m_logger.debugLog("entered");
-            IMyTerminalControlButton ctrl_btn;
-            if (block != m_block)
+			//Log.DebugLog("entered");
+
+			if (block != m_block)
 				return;
 
 			controls.Clear();
 
 			if (m_listCommands)
 			{
-				m_logger.debugLog("showing command list");
+				Log.DebugLog("showing command list");
 
 				if (m_termCommandList == null)
 				{
-                   //m_termCommandList = new MyTerminalControlListbox<MyShipController>("CommandList", MyStringId.GetOrCompute("Commands"), MyStringId.NullOrEmpty, false, 10);
-                    m_termCommandList = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyShipController>("CommandList");
-                    m_termCommandList.Title = MyStringId.GetOrCompute("Commands");
-                    m_termCommandList.Tooltip = MyStringId.NullOrEmpty;
-                    m_termCommandList.Multiselect = false;
-                    m_termCommandList.VisibleRowsCount = 10;                  
-                    m_termCommandList.ListContent = ListCommands;
+					m_termCommandList = new MyTerminalControlListbox<MyShipController>("CommandList", MyStringId.GetOrCompute("Commands"), MyStringId.NullOrEmpty, false, 10);
+					m_termCommandList.ListContent = ListCommands;
 					m_termCommandList.ItemSelected = CommandSelected;
 				}
-				controls.Add(m_termCommandList);               
+				controls.Add(m_termCommandList);
 
-                //controls.Add(new MyTerminalControlButton<MyShipController>("AddCommand", MyStringId.GetOrCompute("Add Command"), MyStringId.NullOrEmpty, AddCommand));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("AddCommand");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Add Command");
-                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
-                ctrl_btn.Action = AddCommand;
-                controls.Add(ctrl_btn);
+				controls.Add(new MyTerminalControlButton<MyShipController>("AddCommand", MyStringId.GetOrCompute("Add Command"), MyStringId.NullOrEmpty, AddCommand));
+				controls.Add(new MyTerminalControlButton<MyShipController>("InsertCommand", MyStringId.GetOrCompute("Insert Command"), MyStringId.NullOrEmpty, InsertCommand));
+				controls.Add(new MyTerminalControlButton<MyShipController>("RemoveCommand", MyStringId.GetOrCompute("Remove Command"), MyStringId.NullOrEmpty, RemoveCommand));
+				controls.Add(new MyTerminalControlButton<MyShipController>("EditCommand", MyStringId.GetOrCompute("Edit Command"), MyStringId.NullOrEmpty, EditCommand));
+				controls.Add(new MyTerminalControlButton<MyShipController>("MoveCommandUp", MyStringId.GetOrCompute("Move Command Up"), MyStringId.NullOrEmpty, MoveCommandUp));
+				controls.Add(new MyTerminalControlButton<MyShipController>("MoveCommandDown", MyStringId.GetOrCompute("Move Command Down"), MyStringId.NullOrEmpty, MoveCommandDown));
+				controls.Add(new MyTerminalControlSeparator<MyShipController>());
+				controls.Add(new MyTerminalControlButton<MyShipController>("Finished", MyStringId.GetOrCompute("Save & Exit"), MyStringId.GetOrCompute("Save all commands and exit"), b => Finished(true)));
+				controls.Add(new MyTerminalControlButton<MyShipController>("DiscardAll", MyStringId.GetOrCompute("Discard & Exit"), MyStringId.GetOrCompute("Discard all commands and exit"), b => Finished(false)));
 
-				//controls.Add(new MyTerminalControlButton<MyShipController>("InsertCommand", MyStringId.GetOrCompute("Insert Command"), MyStringId.NullOrEmpty, InsertCommand));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("InsertCommand");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Insert Command");
-                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
-                ctrl_btn.Action = InsertCommand;
-                controls.Add(ctrl_btn);
-
-                //controls.Add(new MyTerminalControlButton<MyShipController>("RemoveCommand", MyStringId.GetOrCompute("Remove Command"), MyStringId.NullOrEmpty, RemoveCommand));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("RemoveCommand");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Remove Command");
-                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
-                ctrl_btn.Action = RemoveCommand;
-                controls.Add(ctrl_btn);
-
-                //controls.Add(new MyTerminalControlButton<MyShipController>("EditCommand", MyStringId.GetOrCompute("Edit Command"), MyStringId.NullOrEmpty, EditCommand));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("EditCommand");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Edit Command");
-                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
-                ctrl_btn.Action = EditCommand;
-                controls.Add(ctrl_btn);
-
-                //controls.Add(new MyTerminalControlButton<MyShipController>("MoveCommandUp", MyStringId.GetOrCompute("Move Command Up"), MyStringId.NullOrEmpty, MoveCommandUp));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("MoveCommandUp");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Move Command Up");
-                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
-                ctrl_btn.Action = MoveCommandUp;
-                controls.Add(ctrl_btn);
-
-                //controls.Add(new MyTerminalControlButton<MyShipController>("MoveCommandDown", MyStringId.GetOrCompute("Move Command Down"), MyStringId.NullOrEmpty, MoveCommandDown));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("MoveCommandDown");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Move Command Down");
-                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
-                ctrl_btn.Action = MoveCommandDown;
-                controls.Add(ctrl_btn);
-
-                //controls.Add(new MyTerminalControlSeparator<MyShipController>());      
-                controls.Add(MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyShipController>("Seperator"));
-
-                //controls.Add(new MyTerminalControlButton<MyShipController>("Finished", MyStringId.GetOrCompute("Save & Exit"), MyStringId.GetOrCompute("Save all commands and exit"), b => Finished(true)));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("Finished");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Save & Exit");
-                ctrl_btn.Tooltip = MyStringId.GetOrCompute("Save all commands and exit");
-                ctrl_btn.Action = b => Finished(true);
-                controls.Add(ctrl_btn);
-
-                //controls.Add(new MyTerminalControlButton<MyShipController>("DiscardAll", MyStringId.GetOrCompute("Discard & Exit"), MyStringId.GetOrCompute("Discard all commands and exit"), b => Finished(false)));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("DiscardAll");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Discard & Exit");
-                ctrl_btn.Tooltip = MyStringId.GetOrCompute("Discard all commands and exit");
-                ctrl_btn.Action = b => Finished(false);
-                controls.Add(ctrl_btn);
-
-
-                return;
+				return;
 			}
 
 			if (m_currentCommand == null)
@@ -473,60 +417,43 @@ namespace Rynchodon.Autopilot.Instruction
 				// add/insert new command
 				if (m_currentAddNode.Count == 0)
 					m_currentAddNode.Push(Static.addCommandRoot);
-                
-                foreach (AddCommandTreeNode child in m_currentAddNode.Peek().Children)
-                {
-                     ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>(child.Name.RemoveWhitespace());
-                    ctrl_btn.Title = MyStringId.GetOrCompute(child.Name);
-                    ctrl_btn.Tooltip = MyStringId.GetOrCompute(child.Tooltip);
-                    ctrl_btn.Action = shipController =>
-                    {
-                        AddCommandLeafNode leaf = child as AddCommandLeafNode;
-                        if (leaf != null)
-                        {
-                            m_currentCommand = leaf.Command.Clone();
-                            if (!m_currentCommand.HasControls)
-                                CheckAndSave(block);
-                            m_currentAddNode.Clear();
-                        }
-                        else
-                            m_currentAddNode.Push((AddCommandInternalNode)child);
-                        ClearMessage();
-                    };
-                }
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("UpOneLevel");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Up one level");
-                ctrl_btn.Tooltip = MyStringId.GetOrCompute("Return to previous list");
-                ctrl_btn.Action = shipController => {
+
+				foreach (AddCommandTreeNode child in m_currentAddNode.Peek().Children)
+					controls.Add(new MyTerminalControlButton<MyShipController>(child.Name.RemoveWhitespace(), MyStringId.GetOrCompute(child.Name), MyStringId.GetOrCompute(child.Tooltip), shipController => {
+						AddCommandLeafNode leaf = child as AddCommandLeafNode;
+						if (leaf != null)
+						{
+							m_currentCommand = leaf.Command.Clone();
+							if (!m_currentCommand.HasControls)
+								CheckAndSave(block);
+							m_currentAddNode.Clear();
+						}
+						else
+							m_currentAddNode.Push((AddCommandInternalNode)child);
+						ClearMessage();
+					}));
+
+				controls.Add(new MyTerminalControlButton<MyShipController>("UpOneLevel", MyStringId.GetOrCompute("Up one level"), MyStringId.GetOrCompute("Return to previous list"), shipController => {
 					m_currentAddNode.Pop();
 					if (m_currentAddNode.Count == 0)
 						m_listCommands = true;
-					shipController.SwitchTerminalTo();
-				};
+					shipController.RebuildControls();
+				}));
 
 				return;
 			}
 
-			m_logger.debugLog("showing single command: " + m_currentCommand.Identifier);
+			Log.DebugLog("showing single command: " + m_currentCommand.Identifier);
 
 			m_currentCommand.AddControls(controls);
-			//controls.Add(new MyTerminalControlSeparator<MyShipController>());
-            controls.Add(MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSeparator, IMyShipController>("Seperator"));
-            //controls.Add(new MyTerminalControlButton<MyShipController>("SaveGooeyCommand", MyStringId.GetOrCompute("Check & Save"), MyStringId.GetOrCompute("Check the current command for syntax errors and save it"), CheckAndSave));
-            ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("SaveGooeyCommand");
-            ctrl_btn.Title = MyStringId.GetOrCompute("Check & Save");
-            ctrl_btn.Tooltip = MyStringId.GetOrCompute("Check the current command for syntax errors and save it");
-            ctrl_btn.Action = CheckAndSave;
-            //controls.Add(new MyTerminalControlButton<MyShipController>("DiscardGooeyCommand", MyStringId.GetOrCompute("Discard"), MyStringId.GetOrCompute("Discard the current command"), Discard));
-            ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("DiscardGooeyCommand");
-            ctrl_btn.Title = MyStringId.GetOrCompute("Discard");
-            ctrl_btn.Tooltip = MyStringId.GetOrCompute("Discard the current command");
-            ctrl_btn.Action = Discard;
-        }
+			controls.Add(new MyTerminalControlSeparator<MyShipController>());
+			controls.Add(new MyTerminalControlButton<MyShipController>("SaveGooeyCommand", MyStringId.GetOrCompute("Check & Save"), MyStringId.GetOrCompute("Check the current command for syntax errors and save it"), CheckAndSave));
+			controls.Add(new MyTerminalControlButton<MyShipController>("DiscardGooeyCommand", MyStringId.GetOrCompute("Discard"), MyStringId.GetOrCompute("Discard the current command"), Discard));
+		}
 
 		private void ListCommands(IMyTerminalBlock block, List<MyTerminalControlListBoxItem> allItems, List<MyTerminalControlListBoxItem> selected)
 		{
-			m_logger.debugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
+			Log.DebugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
 
 			foreach (ACommand command in m_commandList)
 			{
@@ -540,18 +467,18 @@ namespace Rynchodon.Autopilot.Instruction
 
 		private void CommandSelected(IMyTerminalBlock block, List<MyTerminalControlListBoxItem> selected)
 		{
-			m_logger.debugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
-			m_logger.debugLog("selected.Count: " + selected.Count, Logger.severity.ERROR, condition: selected.Count > 1);
+			Log.DebugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
+			Log.DebugLog("selected.Count: " + selected.Count, Logger.severity.ERROR, condition: selected.Count > 1);
 
 			if (selected.Count == 0)
 			{
 				m_currentCommand = null;
-				m_logger.debugLog("selection cleared");
+				Log.DebugLog("selection cleared");
 			}
 			else
 			{
 				m_currentCommand = (ACommand)selected[0].UserData;
-				m_logger.debugLog("selected: " + m_currentCommand.DisplayString);
+				Log.DebugLog("selected: " + m_currentCommand.DisplayString);
 			}
 		}
 
@@ -559,10 +486,10 @@ namespace Rynchodon.Autopilot.Instruction
 
 		private void Discard(IMyTerminalBlock block)
 		{
-			m_logger.debugLog("entered");
+			Log.DebugLog("entered");
 
-			m_logger.debugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
-			m_logger.debugLog("m_currentCommand == null", Logger.severity.FATAL, condition: m_currentCommand == null);
+			Log.DebugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
+			Log.DebugLog("m_currentCommand == null", Logger.severity.FATAL, condition: m_currentCommand == null);
 
 			m_currentCommand = null;
 			m_listCommands = true;
@@ -572,21 +499,21 @@ namespace Rynchodon.Autopilot.Instruction
 
 		private void CheckAndSave(IMyTerminalBlock block)
 		{
-			m_logger.debugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
-			m_logger.debugLog("m_currentCommand == null", Logger.severity.FATAL, condition: m_currentCommand == null);
+			Log.DebugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
+			Log.DebugLog("m_currentCommand == null", Logger.severity.FATAL, condition: m_currentCommand == null);
 
 			string msg;
 			if (m_currentCommand.ValidateControls((IMyCubeBlock)m_block, out msg))
 			{
 				if (m_commandList.Contains(m_currentCommand))
 				{
-					m_logger.debugLog("edited command: " + m_currentCommand.DisplayString);
+					Log.DebugLog("edited command: " + m_currentCommand.DisplayString);
 				}
 				else
 				{
 					if (m_insertIndex == -1)
 					{
-						m_logger.debugLog("new command: " + m_currentCommand.DisplayString);
+						Log.DebugLog("new command: " + m_currentCommand.DisplayString);
 						m_commandList.Add(m_currentCommand);
 					}
 					else
@@ -594,10 +521,10 @@ namespace Rynchodon.Autopilot.Instruction
 						if (m_replace)
 						{
 							m_commandList.RemoveAt(m_insertIndex);
-							m_logger.debugLog("replace at " + m_insertIndex + ": " + m_currentCommand.DisplayString);
+							Log.DebugLog("replace at " + m_insertIndex + ": " + m_currentCommand.DisplayString);
 						}
 						else
-							m_logger.debugLog("new command at " + m_insertIndex + ": " + m_currentCommand.DisplayString);
+							Log.DebugLog("new command at " + m_insertIndex + ": " + m_currentCommand.DisplayString);
 						m_commandList.Insert(m_insertIndex, m_currentCommand);
 					}
 				}
@@ -607,26 +534,26 @@ namespace Rynchodon.Autopilot.Instruction
 			}
 			else
 			{
-				m_logger.debugLog("failed to save command: " + m_currentCommand.DisplayString + ", reason: " + msg);
+				Log.DebugLog("failed to save command: " + m_currentCommand.DisplayString + ", reason: " + msg);
 				LogAndInfo(msg);
 			}
 		}
 
 		private void AddCommand(IMyTerminalBlock block)
 		{
-			m_logger.debugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
+			Log.DebugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
 
 			m_insertIndex = -1;
 			m_replace = false;
 			m_currentCommand = null;
 			m_listCommands = false;
 			ClearMessage();
-			m_logger.debugLog("adding new command at end");
+			Log.DebugLog("adding new command at end");
 		}
 
 		private void InsertCommand(IMyTerminalBlock block)
 		{
-			m_logger.debugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
+			Log.DebugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
 
 			if (m_currentCommand == null)
 			{
@@ -639,14 +566,14 @@ namespace Rynchodon.Autopilot.Instruction
 			m_currentCommand = null;
 			m_listCommands = false;
 			ClearMessage();
-			m_logger.debugLog("inserting new command at " + m_insertIndex);
+			Log.DebugLog("inserting new command at " + m_insertIndex);
 		}
 
 		private void RemoveCommand(IMyTerminalBlock block)
 		{
-			m_logger.debugLog("entered");
+			Log.DebugLog("entered");
 
-			m_logger.debugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
+			Log.DebugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
 
 			if (m_currentCommand == null)
 			{
@@ -661,7 +588,7 @@ namespace Rynchodon.Autopilot.Instruction
 
 		private void EditCommand(IMyTerminalBlock block)
 		{
-			m_logger.debugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
+			Log.DebugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
 
 			if (m_currentCommand == null)
 			{
@@ -675,7 +602,7 @@ namespace Rynchodon.Autopilot.Instruction
 				return;
 			}
 
-			m_logger.debugLog("editing: " + m_currentCommand.DisplayString);
+			Log.DebugLog("editing: " + m_currentCommand.DisplayString);
 
 			m_insertIndex = m_commandList.IndexOf(m_currentCommand);
 			m_replace = true;
@@ -686,7 +613,7 @@ namespace Rynchodon.Autopilot.Instruction
 
 		private void MoveCommandUp(IMyTerminalBlock block)
 		{
-			m_logger.debugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
+			Log.DebugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
 
 			if (m_currentCommand == null)
 			{
@@ -700,14 +627,14 @@ namespace Rynchodon.Autopilot.Instruction
 				LogAndInfo("already first element: " + m_currentCommand.DisplayString);
 				return;
 			}
-			m_logger.debugLog("moved up: " + m_currentCommand.DisplayString);
+			Log.DebugLog("moved up: " + m_currentCommand.DisplayString);
 			m_commandList.Swap(index, index - 1);
 			ClearMessage();
 		}
 
 		private void MoveCommandDown(IMyTerminalBlock block)
 		{
-			m_logger.debugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
+			Log.DebugLog("block != m_block", Logger.severity.FATAL, condition: block != m_block);
 
 			if (m_currentCommand == null)
 			{
@@ -721,14 +648,14 @@ namespace Rynchodon.Autopilot.Instruction
 				LogAndInfo("already last element: " + m_currentCommand.DisplayString);
 				return;
 			}
-			m_logger.debugLog("moved down: " + m_currentCommand.DisplayString);
+			Log.DebugLog("moved down: " + m_currentCommand.DisplayString);
 			m_commandList.Swap(index, index + 1);
 			ClearMessage();
 		}
 
 		private void Finished(bool save)
 		{
-			m_logger.debugLog("entered");
+			Log.DebugLog("entered");
 
 			if (save)
 			{
@@ -738,47 +665,46 @@ namespace Rynchodon.Autopilot.Instruction
 				GetActions(Commands, m_actionList);
 			}
 
-			//MyTerminalControls.Static.CustomControlGetter -= CustomControlGetter;
-            MyAPIGateway.TerminalControls.CustomControlGetter -= CustomControlGetter;
+			MyTerminalControls.Static.CustomControlGetter -= CustomControlGetter;
 			m_block.AppendingCustomInfo -= m_block_AppendingCustomInfo;
 
-			m_block.RefreshCustomInfo();
-			m_block.SwitchTerminalTo();
+			m_block.UpdateCustomInfo();
+			m_block.RebuildControls();
 
 			Cleanup();
 		}
 
 		#endregion Button Action
 
-		private void LogAndInfo(string message,string member = null, int lineNumber = 0)
+		private void LogAndInfo(string message, [CallerMemberName] string member = null, [CallerLineNumber] int lineNumber = 0)
 		{
-			m_logger.debugLog(message, member: member, lineNumber: lineNumber);
+			Log.DebugLog(message, member: member, lineNumber: lineNumber);
 			m_infoMessage = message;
-			m_block.RefreshCustomInfo();
-			m_block.SwitchTerminalTo();
+			m_block.UpdateCustomInfo();
+			m_block.RebuildControls();
 		}
 
 		private void ClearMessage()
 		{
 			m_infoMessage = null;
-			m_block.RefreshCustomInfo();
-			m_block.SwitchTerminalTo();
+			m_block.UpdateCustomInfo();
+			m_block.RebuildControls();
 		}
 
 		private void m_block_AppendingCustomInfo(IMyTerminalBlock arg1, StringBuilder arg2)
 		{
-			m_logger.debugLog("entered");
+			Log.DebugLog("entered");
 
 			if (!string.IsNullOrWhiteSpace(m_infoMessage))
 			{
-				m_logger.debugLog("appending info message: " + m_infoMessage);
+				Log.DebugLog("appending info message: " + m_infoMessage);
 				arg2.AppendLine();
 				arg2.AppendLine(m_infoMessage);
 			}
 
 			if (!m_listCommands && m_currentCommand != null)
 			{
-				m_logger.debugLog("appending command info");
+				Log.DebugLog("appending command info");
 				arg2.AppendLine();
 				m_currentCommand.AppendCustomInfo(arg2);
 				arg2.AppendLine();
@@ -789,7 +715,7 @@ namespace Rynchodon.Autopilot.Instruction
 		{
 			if (m_syntaxErrors.Length != 0)
 			{
-				m_logger.debugLog("appending syntax errors");
+				Log.DebugLog("appending syntax errors");
 				arg2.AppendLine();
 				arg2.Append("Syntax Errors:\n");
 				arg2.Append(m_syntaxErrors);

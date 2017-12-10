@@ -1,6 +1,7 @@
 using System.Text;
 using Rynchodon.Autopilot.Data;
-using Rynchodon.Autopilot.Movement;
+using Rynchodon.Autopilot.Pathfinding;
+using Rynchodon.Utility;
 using VRageMath;
 
 namespace Rynchodon.Autopilot.Navigator
@@ -10,22 +11,21 @@ namespace Rynchodon.Autopilot.Navigator
 	/// </summary>
 	public class GOLIS : NavigatorMover, INavigatorRotator
 	{
-
-		private readonly Logger myLogger;
 		private readonly PseudoBlock NavigationBlock;
 		private readonly Vector3D location;
 		private readonly AllNavigationSettings.SettingsLevelName m_level;
 
+		private Logable Log { get { return new Logable(m_controlBlock?.CubeBlock); } }
+
 		/// <summary>
 		/// Creates a GOLIS
 		/// </summary>
-		/// <param name="mover">The mover to use</param>
+		/// <param name="pathfinder">The mover to use</param>
 		/// <param name="navSet">The settings to use</param>
 		/// <param name="location">The location to fly to</param>
-		public GOLIS(Mover mover, Vector3D location, AllNavigationSettings.SettingsLevelName level = AllNavigationSettings.SettingsLevelName.NavMove)
-			: base(mover)
+		public GOLIS(Pathfinder pathfinder, Vector3D location, AllNavigationSettings.SettingsLevelName level = AllNavigationSettings.SettingsLevelName.NavMove)
+			: base(pathfinder)
 		{
-			this.myLogger = new Logger(m_controlBlock.CubeBlock);
 			this.NavigationBlock = m_navSet.Settings_Current.NavigationBlock;
 			this.location = location;
 			this.m_level = level;
@@ -44,13 +44,16 @@ namespace Rynchodon.Autopilot.Navigator
 		{
 			if (m_navSet.DistanceLessThanDestRadius())
 			{
-				myLogger.debugLog("Reached destination: " + location, Logger.severity.INFO);
+				Log.DebugLog("Reached destination: " + location, Logger.severity.INFO);
 				m_navSet.OnTaskComplete(m_level);
 				m_mover.StopMove();
 				m_mover.StopRotate();
 			}
 			else
-				m_mover.CalcMove(NavigationBlock, location, Vector3.Zero);
+			{
+				Destination destination = new Destination(location);
+				m_pathfinder.MoveTo(destinations: destination);
+			}
 		}
 
 		/// <summary>

@@ -1,21 +1,21 @@
-﻿using System;
+//#define USE_AI // SE 1.178: not working
+
+using System;
 using System.Collections.Generic;
 using Sandbox.Definitions;
 using Sandbox.Game.Entities;
+using Sandbox.Game.Weapons;
 using Sandbox.ModAPI;
-using Sandbox.ModAPI.Interfaces;
+using Rynchodon.Utility;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
+using VRage.ModAPI;
 using VRageMath;
-using Ingame = SpaceEngineers.Game.ModAPI.Ingame;
 
 namespace Rynchodon.Weapons
 {
-	public class Turret : WeaponTargeting
+	public sealed class Turret : WeaponTargeting
 	{
-
-		/// <summary>vanilla property</summary>
-		private static ITerminalProperty<bool> TP_TargetMissiles, TP_TargetMeteors, TP_TargetCharacters, TP_TargetMoving, TP_TargetLargeGrids, TP_TargetSmallGrids, TP_TargetStations, TP_TargetNeutrals;
 
 		private readonly MyEntitySubpart m_barrel;
 		/// <summary>limits to determine whether or not a turret can face a target</summary>
@@ -28,28 +28,11 @@ namespace Rynchodon.Weapons
 		/// <summary>value set by Turret, updated when not controlling</summary>
 		private float setElevation, setAzimuth;
 
-		private Logger myLogger;
+		private Logable Log { get { return new Logable(CubeBlock); } }
 
 		public Turret(IMyCubeBlock block)
 			: base(block)
 		{
-			myLogger = new Logger(block);
-			Registrar.Add(CubeBlock, this);
-
-			if (TP_TargetMissiles == null)
-			{
-				myLogger.debugLog("Filling Terminal Properties", Logger.severity.INFO);
-				IMyTerminalBlock term = CubeBlock as IMyTerminalBlock;
-				TP_TargetMissiles = term.GetProperty("TargetMissiles").AsBool();
-				TP_TargetMeteors = term.GetProperty("TargetMeteors").AsBool();
-				TP_TargetCharacters = term.GetProperty("TargetCharacters").AsBool();
-				TP_TargetMoving = term.GetProperty("TargetMoving").AsBool();
-				TP_TargetLargeGrids = term.GetProperty("TargetLargeShips").AsBool();
-				TP_TargetSmallGrids = term.GetProperty("TargetSmallShips").AsBool();
-				TP_TargetStations = term.GetProperty("TargetStations").AsBool();
-				TP_TargetNeutrals = term.GetProperty("TargetNeutrals").AsBool();
-			}
-
 			// definition limits
 			MyLargeTurretBaseDefinition definition = CubeBlock.GetCubeBlockDefinition() as MyLargeTurretBaseDefinition;
 
@@ -78,8 +61,8 @@ namespace Rynchodon.Weapons
 				subparts = m_barrel.Subparts;
 			}
 
-			//myLogger.debugLog("definition limits = " + definition.MinElevationDegrees + ", " + definition.MaxElevationDegrees + ", " + definition.MinAzimuthDegrees + ", " + definition.MaxAzimuthDegrees, "Turret()");
-			//myLogger.debugLog("radian limits = " + minElevation + ", " + maxElevation + ", " + minAzimuth + ", " + maxAzimuth, "Turret()");
+			//Log.DebugLog("definition limits = " + definition.MinElevationDegrees + ", " + definition.MaxElevationDegrees + ", " + definition.MinAzimuthDegrees + ", " + definition.MaxAzimuthDegrees, "Turret()");
+			//Log.DebugLog("radian limits = " + minElevation + ", " + maxElevation + ", " + minAzimuth + ", " + maxAzimuth, "Turret()");
 		}
 
 		/// <summary>
@@ -87,32 +70,33 @@ namespace Rynchodon.Weapons
 		/// </summary>
 		protected override void Update100_Options_TargetingThread(TargetingOptions Options)
 		{
-			SetFlag(TP_TargetMissiles, TargetType.Missile);
-			SetFlag(TP_TargetMeteors, TargetType.Meteor);
-			SetFlag(TP_TargetCharacters, TargetType.Character);
-			SetFlag(TP_TargetMoving, TargetType.Moving);
-			SetFlag(TP_TargetLargeGrids, TargetType.LargeGrid);
-			SetFlag(TP_TargetSmallGrids, TargetType.SmallGrid);
-			SetFlag(TP_TargetStations, TargetType.Station);
-			if (TP_TargetNeutrals.GetValue(CubeBlock))
+			MyLargeTurretBase turret = (MyLargeTurretBase)CubeBlock;
+			SetFlag(turret.TargetMissiles, TargetType.Missile);
+			SetFlag(turret.TargetMeteors, TargetType.Meteor);
+			SetFlag(turret.TargetCharacters, TargetType.Character);
+			SetFlag(turret.TargetLargeGrids, TargetType.LargeGrid);
+			SetFlag(turret.TargetSmallGrids, TargetType.SmallGrid);
+			SetFlag(turret.TargetStations, TargetType.Station);
+
+			if (turret.TargetNeutrals)
 				Options.Flags &= ~TargetingFlags.IgnoreOwnerless;
 			else
 				Options.Flags |= TargetingFlags.IgnoreOwnerless;
 
 			Options.TargetingRange = myTurret.Range;
 
-			//myLogger.debugLog("CanTarget = " + Options.CanTarget, "TargetOptionsFromTurret()");
+			//Log.DebugLog("CanTarget = " + Options.CanTarget, "TargetOptionsFromTurret()");
 		}
 
-		private void SetFlag(ITerminalProperty<bool> prop, TargetType typeFlag)
+		private void SetFlag(bool enable, TargetType typeFlag)
 		{
-			if (prop.GetValue(CubeBlock))
+			if (enable)
 				Options.CanTarget |= typeFlag;
 			else
 				Options.CanTarget &= ~typeFlag;
 		}
 
-		protected override bool CanRotateTo(Vector3D targetPoint)
+		protected override bool CanRotateTo(ref Vector3D targetPoint, IMyEntity target)
 		{
 			Vector3 localTarget = Vector3.Transform(targetPoint, CubeBlock.WorldMatrixNormalizedInv);
 			localTarget.Normalize();
@@ -120,16 +104,16 @@ namespace Rynchodon.Weapons
 			float azimuth, elevation;
 			Vector3.GetAzimuthAndElevation(localTarget, out azimuth, out elevation);
 
-			//myLogger.debugLog("target azimuth: " + azimuth + ", elevation: " + elevation, "CanRotateTo()");
+			//Log.DebugLog("target azimuth: " + azimuth + ", elevation: " + elevation, "CanRotateTo()");
 
 			if (elevation < minElevation)
 			{
-				//myLogger.debugLog("Cannot rotate to " + targetPoint + ", local: " + localTarget + ", elevation: " + elevation + " below min: " + minElevation, "CanRotateTo()");
+				//Log.DebugLog("Cannot rotate to " + targetPoint + ", local: " + localTarget + ", elevation: " + elevation + " below min: " + minElevation, "CanRotateTo()");
 				return false;
 			}
 			if (elevation > maxElevation)
 			{
-				//myLogger.debugLog("Cannot rotate to " + targetPoint + ", local: " + localTarget + ", elevation: " + elevation + " above max: " + maxElevation, "CanRotateTo()");
+				//Log.DebugLog("Cannot rotate to " + targetPoint + ", local: " + localTarget + ", elevation: " + elevation + " above max: " + maxElevation, "CanRotateTo()");
 				return false;
 			}
 
@@ -137,12 +121,12 @@ namespace Rynchodon.Weapons
 				return true;
 			if (azimuth < minAzimuth)
 			{
-				//myLogger.debugLog("Cannot rotate to " + targetPoint + ", local: " + localTarget + ", azimuth: " + azimuth + " below min: " + minAzimuth, "CanRotateTo()");
+				//Log.DebugLog("Cannot rotate to " + targetPoint + ", local: " + localTarget + ", azimuth: " + azimuth + " below min: " + minAzimuth, "CanRotateTo()");
 				return false;
 			}
 			if (azimuth > maxAzimuth)
 			{
-				//myLogger.debugLog("Cannot rotate to " + targetPoint + ", local: " + localTarget + ", azimuth: " + azimuth + " above max: " + maxAzimuth, "CanRotateTo()");
+				//Log.DebugLog("Cannot rotate to " + targetPoint + ", local: " + localTarget + ", azimuth: " + azimuth + " above max: " + maxAzimuth, "CanRotateTo()");
 				return false;
 			}
 			return true;
@@ -153,7 +137,7 @@ namespace Rynchodon.Weapons
 			return m_barrel.PositionComp.GetPosition();
 		}
 
-		protected override Vector3 Facing()
+		public override Vector3 Facing()
 		{
 			return m_barrel.PositionComp.WorldMatrix.Forward;
 		}
@@ -168,7 +152,9 @@ namespace Rynchodon.Weapons
 
 			if (CurrentControl == Control.Off)
 			{
+#if USE_AI
 				if (!myTurret.AIEnabled)
+#endif
 				{
 					setElevation = myTurret.Elevation;
 					setAzimuth = myTurret.Azimuth;
@@ -186,22 +172,24 @@ namespace Rynchodon.Weapons
 			if (!GotTarget.FiringDirection.HasValue || !GotTarget.ContactPoint.HasValue) // happens alot
 				return;
 
-			// as of SE 01.130.010 SetTarget does not work
-			//if (myTurret.AIEnabled)
-			//{
-			//	myTurret.SetTarget(ProjectilePosition() + GotTarget.FiringDirection.Value * 100f);
-			//	return;
-			//}
+#if USE_AI
+			// broken in UNSTABLE
+			if (myTurret.AIEnabled)
+			{
+				myTurret.SetTarget(ProjectilePosition() + GotTarget.FiringDirection.Value * 1000f);
+				return;
+			}
+#endif
 
 			//Vector3 RotateTo = RelativeVector3F.createFromWorld(GotTarget.FiringDirection.Value, weapon.CubeGrid).getBlock(weapon);
 			Vector3 RotateToDirection = RelativeDirection3F.FromWorld(CubeBlock.CubeGrid, GotTarget.FiringDirection.Value).ToBlockNormalized(CubeBlock);
-			//myLogger.debugLog("FiringDirection = " + GotTarget.FiringDirection.Value + ", RotateToDirection = " + RotateToDirection, "Update()");
+			//Log.DebugLog("FiringDirection = " + GotTarget.FiringDirection.Value + ", RotateToDirection = " + RotateToDirection, "Update()");
 
 			float targetElevation, targetAzimuth; // the position of the target
 			Vector3.GetAzimuthAndElevation(RotateToDirection, out targetAzimuth, out targetElevation);
 			if (!targetElevation.IsValid() || !targetAzimuth.IsValid())
 			{
-				//myLogger.debugLog("cannot rotate, invalid el(" + targetElevation + ") or az(" + targetAzimuth + ")", "RotateAndFire()");
+				//Log.DebugLog("cannot rotate, invalid el(" + targetElevation + ") or az(" + targetAzimuth + ")", "RotateAndFire()");
 				return;
 			}
 
@@ -244,7 +232,7 @@ namespace Rynchodon.Weapons
 					nextAzimuth = maxAzimuth;
 			}
 
-			//myLogger.debugLog("next elevation = " + nextElevation + ", next azimuth = " + nextAzimuth, "RotateAndFire()");
+			//Log.DebugLog("next elevation = " + nextElevation + ", next azimuth = " + nextAzimuth, "RotateAndFire()");
 
 			// apply changes
 			if (nextElevation != myTurret.Elevation)
@@ -253,14 +241,14 @@ namespace Rynchodon.Weapons
 				myTurret.SyncElevation();
 			}
 			//else
-			//	myLogger.debugLog("not setting elevation", "RotateAndFire()");
+			//	Log.DebugLog("not setting elevation", "RotateAndFire()");
 			if (nextAzimuth != myTurret.Azimuth)
 			{
 				myTurret.Azimuth = nextAzimuth;
 				myTurret.SyncAzimuth();
 			}
 			//else
-			//	myLogger.debugLog("not setting azimuth", "RotateAndFire()");
+			//	Log.DebugLog("not setting azimuth", "RotateAndFire()");
 
 			setElevation = nextElevation;
 			setAzimuth = nextAzimuth;

@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Text;
 using Rynchodon.AntennaRelay;
 using Rynchodon.Autopilot.Data;
-using Rynchodon.Autopilot.Movement;
+using Rynchodon.Autopilot.Pathfinding;
 using Rynchodon.Settings;
+using Rynchodon.Utility;
 using Rynchodon.Weapons;
 using Sandbox.Common.ObjectBuilders;
 using VRage.Collections;
@@ -22,10 +23,10 @@ namespace Rynchodon.Autopilot.Navigator
 	public class Fighter : NavigatorMover, IEnemyResponse, IDisposable
 	{
 
+		private const float FinalAltitude = -50f, InitialAltitude = 200f;
+
 		private static readonly MyObjectBuilderType[] TurretWeaponTypes = new MyObjectBuilderType[] { typeof(MyObjectBuilder_LargeGatlingTurret), typeof(MyObjectBuilder_LargeMissileTurret), typeof(MyObjectBuilder_InteriorTurret) };
 		private static readonly TargetType[] CumulativeTypes = new TargetType[] { TargetType.SmallGrid, TargetType.LargeGrid, TargetType.Station };
-
-		private readonly Logger m_logger;
 
 		private readonly CachingList<FixedWeapon> m_weapons_fixed = new CachingList<FixedWeapon>();
 		private readonly CachingList<WeaponTargeting> m_weapons_all = new CachingList<WeaponTargeting>();
@@ -40,10 +41,14 @@ namespace Rynchodon.Autopilot.Navigator
 		private bool m_destroySet = false;
 		private bool m_weaponDataDirty = true;
 
-		public Fighter(Mover mover, AllNavigationSettings navSet)
-			: base(mover)
+		private Logable Log
 		{
-			this.m_logger = new Logger(() => m_controlBlock.CubeGrid.DisplayName);
+			get { return new Logable(m_controlBlock.CubeGrid); }
+		}
+
+		public Fighter(Pathfinder pathfinder, AllNavigationSettings navSet)
+			: base(pathfinder)
+		{
 			Arm();
 		}
 
@@ -75,11 +80,12 @@ namespace Rynchodon.Autopilot.Navigator
 				m_navSet.Settings_Commands.Complaint |= InfoString.StringId.FighterNoPrimary;
 				return false;
 			}
+			m_navSet.Settings_Task_NavEngage.NavigationBlock = m_weapon_primary_pseudo;
 
 			if (m_weaponDataDirty)
 				UpdateWeaponData();
 
-			//m_logger.debugLog("weapon count: " + m_weapons_all.Count, "CanRespond()"); 
+			//Log.DebugLog("weapon count: " + m_weapons_all.Count, "CanRespond()"); 
 
 			if (m_weapons_all.Count == 0)
 			{
@@ -94,7 +100,7 @@ namespace Rynchodon.Autopilot.Navigator
 		{
 			if (enemy == null)
 			{
-				m_logger.debugLog("lost target", Logger.severity.DEBUG, condition: m_currentTarget != null);
+				Log.DebugLog("lost target", Logger.severity.DEBUG, condition: m_currentTarget != null);
 				m_currentTarget = null;
 				m_orbiter = null;
 				return;
@@ -102,7 +108,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 			if (m_currentTarget == null || m_currentTarget.Entity != enemy.Entity)
 			{
-				m_logger.debugLog("new target: " + enemy.Entity.getBestName(), Logger.severity.DEBUG);
+				Log.DebugLog("new target: " + enemy.Entity.getBestName(), Logger.severity.DEBUG);
 				m_currentTarget = enemy;
 				m_navSet.Settings_Task_NavEngage.DestinationEntity = m_currentTarget.Entity;
 			}
@@ -116,11 +122,11 @@ namespace Rynchodon.Autopilot.Navigator
 				cache = CubeGridCache.GetFor(grid);
 				if (cache.TerminalBlocks > 0)
 				{
-					m_logger.debugLog("destoy: " + grid.DisplayName);
+					Log.DebugLog("destoy: " + grid.DisplayName);
 					return true;
 				}
 				else
-					m_logger.debugLog("destroy set but no terminal blocks found: " + grid.DisplayName); 
+					Log.DebugLog("destroy set but no terminal blocks found: " + grid.DisplayName); 
 			}
 
 			if (m_currentTarget != null && grid == m_currentTarget.Entity && m_weapon_primary.CurrentTarget.TType != TargetType.None)
@@ -135,10 +141,11 @@ namespace Rynchodon.Autopilot.Navigator
 			{
 				if (cache == null)
 					cache = CubeGridCache.GetFor(grid);
-				return targetBlocks.HasAny(cache, block => block.IsWorking);
+				foreach (IMyCubeBlock block in targetBlocks.Blocks(cache))
+					return true;
 			}
 			else
-				m_logger.debugLog("no targeting at all for grid type of: " + grid.DisplayName);
+				Log.DebugLog("no targeting at all for grid type of: " + grid.DisplayName);
 
 			return false;
 		}
@@ -153,7 +160,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 			if (m_weapon_primary == null || m_weapon_primary.CubeBlock.Closed)
 			{
-				m_logger.debugLog("no primary weapon");
+				Log.DebugLog("no primary weapon");
 				m_mover.StopMove();
 				return;
 			}
@@ -169,19 +176,21 @@ namespace Rynchodon.Autopilot.Navigator
 				if (m_navSet.DistanceLessThan(m_weaponRange_min * 2f))
 				{
 					// we give orbiter a lower distance, so it will calculate orbital speed from that
-					m_orbiter = new Orbiter(m_mover, m_navSet, m_weapon_primary_pseudo, m_currentTarget.Entity, m_weaponRange_min - 50f, m_currentTarget.HostileName());
+					m_orbiter = new Orbiter(m_pathfinder, m_navSet, m_currentTarget.Entity, m_weaponRange_min + FinalAltitude, m_currentTarget.HostileName());
 					// start further out so we can spiral inwards
 					m_finalOrbitAltitude = m_orbiter.Altitude;
-					m_orbiter.Altitude = m_finalOrbitAltitude + 250f;
-					m_logger.debugLog("weapon range: " + m_weaponRange_min + ", final orbit altitude: " + m_finalOrbitAltitude + ", initial orbit altitude: " + m_orbiter.Altitude, Logger.severity.DEBUG);
+					m_orbiter.Altitude = m_finalOrbitAltitude + InitialAltitude - FinalAltitude;
+					Log.DebugLog("weapon range: " + m_weaponRange_min + ", final orbit altitude: " + m_finalOrbitAltitude + ", initial orbit altitude: " + m_orbiter.Altitude, Logger.severity.DEBUG);
 				}
 				else
 				{
-					Vector3D targetPosition = m_currentTarget.GetPosition();
-					Vector3D direction = Vector3D.Normalize(m_weapon_primary_pseudo.WorldPosition - targetPosition);
-					targetPosition += direction * m_weaponRange_min * 1.9f;
+					m_mover.Thrust.Update();
+					Vector3 direction = m_mover.SignificantGravity() ?
+						(Vector3)m_mover.Thrust.WorldGravity / -m_mover.Thrust.GravityStrength :
+						Vector3.CalculatePerpendicularVector(Vector3.Normalize(m_weapon_primary_pseudo.WorldPosition - m_currentTarget.GetPosition()));
+					Vector3 offset = direction * (m_weaponRange_min + InitialAltitude);
 
-					m_mover.CalcMove(m_weapon_primary_pseudo, targetPosition, m_currentTarget.Entity.Physics.LinearVelocity);
+					m_pathfinder.MoveTo(m_currentTarget, offset);
 					return;
 				}
 			}
@@ -189,14 +198,14 @@ namespace Rynchodon.Autopilot.Navigator
 			Target current = m_weapon_primary.CurrentTarget;
 			if ((current == null || current.Entity == null) && m_orbiter.Altitude > m_finalOrbitAltitude && m_navSet.DistanceLessThan(m_orbiter.OrbitSpeed * 0.5f))
 			{
-				m_logger.debugLog("weapon range: " + m_weaponRange_min + ", final orbit altitude: " + m_finalOrbitAltitude + ", initial orbit altitude: " + m_orbiter.Altitude +
+				Log.DebugLog("weapon range: " + m_weaponRange_min + ", final orbit altitude: " + m_finalOrbitAltitude + ", initial orbit altitude: " + m_orbiter.Altitude +
 					", dist: " + m_navSet.Settings_Current.Distance + ", orbit speed: " + m_orbiter.OrbitSpeed, Logger.severity.TRACE);
 				m_orbiter.Altitude -= 10f;
 			}
 
 			m_orbiter.Move();
 
-			////m_logger.debugLog("moving to " + (m_currentTarget.predictPosition() + m_currentOffset), "Move()");
+			////Log.DebugLog("moving to " + (m_currentTarget.predictPosition() + m_currentOffset), "Move()");
 			//m_mover.CalcMove(m_weapon_primary_pseudo, m_currentTarget.GetPosition() + m_currentOffset, m_currentTarget.GetLinearVelocity());
 		}
 
@@ -210,7 +219,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 			if (m_weapon_primary == null || m_weapon_primary.CubeBlock.Closed)
 			{
-				m_logger.debugLog("no primary weapon");
+				Log.DebugLog("no primary weapon");
 				Disarm();
 				m_mover.StopRotate();
 				return;
@@ -224,7 +233,7 @@ namespace Rynchodon.Autopilot.Navigator
 					m_mover.CalcRotate();
 				return;
 			}
-			//m_logger.debugLog("facing target at " + firingDirection.Value, "Rotate()");
+			//Log.DebugLog("facing target at " + firingDirection.Value, "Rotate()");
 
 			RelativeDirection3F upDirect = null;
 			if (m_mover.SignificantGravity())
@@ -252,37 +261,37 @@ namespace Rynchodon.Autopilot.Navigator
 		{
 			if (!ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bAllowWeaponControl))
 			{
-				m_logger.debugLog("Cannot arm, weapon control is disabled.", Logger.severity.WARNING);
+				Log.DebugLog("Cannot arm, weapon control is disabled.", Logger.severity.WARNING);
 				return;
 			}
 
-			m_logger.debugLog("Arming", Logger.severity.DEBUG);
+			Log.DebugLog("Arming", Logger.severity.DEBUG);
 
-			m_logger.debugLog("Fixed weapons has not been cleared", Logger.severity.FATAL, condition: m_weapons_fixed.Count != 0);
-			m_logger.debugLog("All weapons has not been cleared", Logger.severity.FATAL, condition: m_weapons_all.Count != 0);
+			Log.DebugLog("Fixed weapons has not been cleared", Logger.severity.FATAL, condition: m_weapons_fixed.Count != 0);
+			Log.DebugLog("All weapons has not been cleared", Logger.severity.FATAL, condition: m_weapons_all.Count != 0);
 
 			m_weaponRange_min = float.MaxValue;
 
 			CubeGridCache cache = CubeGridCache.GetFor(m_controlBlock.CubeGrid);
 
-			foreach (FixedWeapon weapon in Registrar.Scripts<FixedWeapon>())
+			foreach (FixedWeapon weapon in Registrar.Scripts<FixedWeapon, WeaponTargeting>())
 			{
 				if (weapon.CubeBlock.CubeGrid == m_controlBlock.CubeGrid)
 				{
 					if (weapon.EngagerTakeControl())
 					{
-						m_logger.debugLog("Took control of " + weapon.CubeBlock.DisplayNameText);
+						Log.DebugLog("Took control of " + weapon.CubeBlock.DisplayNameText);
 						m_weapons_fixed.Add(weapon);
 						m_weapons_all.Add(weapon);
 
 						weapon.CubeBlock.OnClosing += Weapon_OnClosing;
 					}
 					else
-						m_logger.debugLog("failed to get control of: " + weapon.CubeBlock.DisplayNameText);
+						Log.DebugLog("failed to get control of: " + weapon.CubeBlock.DisplayNameText);
 				}
 				if (weapon.MotorTurretBaseGrid() == m_controlBlock.CubeGrid)
 				{
-					m_logger.debugLog("Active motor turret: " + weapon.CubeBlock.DisplayNameText);
+					Log.DebugLog("Active motor turret: " + weapon.CubeBlock.DisplayNameText);
 					m_weapons_all.Add(weapon);
 
 					weapon.CubeBlock.OnClosing += Weapon_OnClosing;
@@ -291,20 +300,22 @@ namespace Rynchodon.Autopilot.Navigator
 
 			foreach (MyObjectBuilderType weaponType in TurretWeaponTypes)
 			{
-				ReadOnlyList<IMyCubeBlock> weaponBlocks = cache.GetBlocksOfType(weaponType);
-				if (weaponBlocks != null)
-					foreach (IMyCubeBlock block in weaponBlocks)
+				foreach (IMyCubeBlock block in cache.BlocksOfType(weaponType))
+				{
+					WeaponTargeting weapon;
+					if (!Registrar.TryGetValue(block.EntityId, out weapon))
 					{
-						Turret weapon;
-						Registrar.TryGetValue(block.EntityId, out weapon);
-						if (weapon.CurrentControl != WeaponTargeting.Control.Off)
-						{
-							m_logger.debugLog("Active turret: " + weapon.CubeBlock.DisplayNameText);
-							m_weapons_all.Add(weapon);
-
-							weapon.CubeBlock.OnClosing += Weapon_OnClosing;
-						}
+						Logger.AlwaysLog("Failed to get block: " + block.nameWithId(), Logger.severity.WARNING);
+						continue;
 					}
+					if (weapon.CurrentControl != WeaponTargeting.Control.Off)
+					{
+						Log.DebugLog("Active turret: " + weapon.CubeBlock.DisplayNameText);
+						m_weapons_all.Add(weapon);
+
+						weapon.CubeBlock.OnClosing += Weapon_OnClosing;
+					}
+				}
 			}
 
 			m_weapons_fixed.ApplyAdditions();
@@ -313,9 +324,9 @@ namespace Rynchodon.Autopilot.Navigator
 			m_weaponArmed = m_weapons_all.Count != 0;
 			m_weaponDataDirty = m_weaponArmed;
 			if (m_weaponArmed)
-				m_logger.debugLog("Now armed", Logger.severity.DEBUG);
+				Log.DebugLog("Now armed", Logger.severity.DEBUG);
 			else
-				m_logger.debugLog("Failed to arm", Logger.severity.DEBUG);
+				Log.DebugLog("Failed to arm", Logger.severity.DEBUG);
 		}
 
 		private void Disarm()
@@ -323,7 +334,7 @@ namespace Rynchodon.Autopilot.Navigator
 			if (!m_weaponArmed)
 				return;
 
-			m_logger.debugLog("Disarming", Logger.severity.DEBUG);
+			Log.DebugLog("Disarming", Logger.severity.DEBUG);
 
 			foreach (FixedWeapon weapon in m_weapons_fixed)
 				weapon.EngagerReleaseControl();
@@ -360,16 +371,16 @@ namespace Rynchodon.Autopilot.Navigator
 						weapon_primary = weapon;
 						if (weapon.CurrentTarget.Entity != null)
 						{
-							m_logger.debugLog("has target: " + weapon.CubeBlock.DisplayNameText);
+							Log.DebugLog("has target: " + weapon.CubeBlock.DisplayNameText);
 							break;
 						}
 					}
 					else
-						m_logger.debugLog("no ammo: " + weapon.CubeBlock.DisplayNameText);
+						Log.DebugLog("no ammo: " + weapon.CubeBlock.DisplayNameText);
 				}
 				else
 				{
-					m_logger.debugLog("not working: " + weapon.CubeBlock.DisplayNameText);
+					Log.DebugLog("not working: " + weapon.CubeBlock.DisplayNameText);
 					m_weapons_fixed.Remove(weapon);
 					weapon.EngagerReleaseControl();
 					removed = true;
@@ -384,16 +395,16 @@ namespace Rynchodon.Autopilot.Navigator
 							weapon_primary = weapon;
 							if (weapon.CurrentTarget.Entity != null)
 							{
-								m_logger.debugLog("has target: " + weapon.CubeBlock.DisplayNameText);
+								Log.DebugLog("has target: " + weapon.CubeBlock.DisplayNameText);
 								break;
 							}
 						}
 						else
-							m_logger.debugLog("no ammo: " + weapon.CubeBlock.DisplayNameText);
+							Log.DebugLog("no ammo: " + weapon.CubeBlock.DisplayNameText);
 					}
 					else
 					{
-						m_logger.debugLog("not working: " + weapon.CubeBlock.DisplayNameText);
+						Log.DebugLog("not working: " + weapon.CubeBlock.DisplayNameText);
 						m_weapons_all.Remove(weapon);
 						removed = true;
 					}
@@ -420,7 +431,7 @@ namespace Rynchodon.Autopilot.Navigator
 				if (fixedWeapon != null && fixedWeapon.CubeBlock.CubeGrid != m_controlBlock.CubeGrid)
 				{
 					faceBlock = fixedWeapon.MotorTurretFaceBlock();
-					m_logger.debugLog("MotorTurretFaceBlock == null", Logger.severity.FATAL, condition: faceBlock == null);
+					Log.DebugLog("MotorTurretFaceBlock == null", Logger.severity.FATAL, condition: faceBlock == null);
 				}
 				else
 					faceBlock = weapon_primary.CubeBlock;
@@ -429,7 +440,7 @@ namespace Rynchodon.Autopilot.Navigator
 				{
 					if (m_mover.Thrust.Standard.LocalMatrix.Forward == faceBlock.LocalMatrix.Forward)
 					{
-						m_logger.debugLog("primary forward matches Standard forward");
+						Log.DebugLog("primary forward matches Standard forward");
 						Matrix localMatrix = m_mover.Thrust.Standard.LocalMatrix;
 						localMatrix.Translation = faceBlock.LocalMatrix.Translation;
 						m_weapon_primary_pseudo = new PseudoBlock(() => faceBlock.CubeGrid, localMatrix);
@@ -437,13 +448,13 @@ namespace Rynchodon.Autopilot.Navigator
 					}
 					if (m_mover.Thrust.Gravity.LocalMatrix.Forward == faceBlock.LocalMatrix.Forward)
 					{
-						m_logger.debugLog("primary forward matches Gravity forward");
+						Log.DebugLog("primary forward matches Gravity forward");
 						Matrix localMatrix = m_mover.Thrust.Gravity.LocalMatrix;
 						localMatrix.Translation = faceBlock.LocalMatrix.Translation;
 						m_weapon_primary_pseudo = new PseudoBlock(() => faceBlock.CubeGrid, localMatrix);
 						return;
 					}
-					m_logger.debugLog("cannot match primary forward to a standard flight matrix. primary forward: " + faceBlock.LocalMatrix.Forward +
+					Log.DebugLog("cannot match primary forward to a standard flight matrix. primary forward: " + faceBlock.LocalMatrix.Forward +
 						", Standard forward: " + m_mover.Thrust.Standard.LocalMatrix.Forward + ", gravity forward: " + m_mover.Thrust.Gravity.LocalMatrix.Forward);
 				}
 				m_weapon_primary_pseudo = new PseudoBlock(faceBlock);
@@ -487,13 +498,13 @@ namespace Rynchodon.Autopilot.Navigator
 
 				if (destroy)
 				{
-					m_logger.debugLog("destroy set for " + weapon.CubeBlock.DisplayNameText);
+					Log.DebugLog("destroy set for " + weapon.CubeBlock.DisplayNameText);
 					m_destroySet = true;
 					m_cumulative_targeting.Clear();
 					continue;
 				}
 				else
-					m_logger.debugLog("destroy NOT set for " + weapon.CubeBlock.DisplayNameText);
+					Log.DebugLog("destroy NOT set for " + weapon.CubeBlock.DisplayNameText);
 
 				foreach (TargetType type in CumulativeTypes)
 					if (weapon.Options.CanTargetType(type))
@@ -505,7 +516,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 			if (m_weapons_all.Count == 0)
 			{
-				m_logger.debugLog("No working weapons, " + GetType().Name + " is done here", Logger.severity.INFO);
+				Log.DebugLog("No working weapons, " + GetType().Name + " is done here", Logger.severity.INFO);
 				m_navSet.OnTaskComplete_NavEngage();
 			}
 
@@ -516,7 +527,7 @@ namespace Rynchodon.Autopilot.Navigator
 		{
 			if (blocks == null)
 				return;
-			m_logger.debugLog("adding to type: " + type + ", count: " + blocks.BlockNamesContain.Length);
+			Log.DebugLog("adding to type: " + type + ", count: " + blocks.BlockNamesContain.Length);
 
 			if (type == TargetType.AllGrid)
 			{

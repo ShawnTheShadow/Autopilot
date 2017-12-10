@@ -10,7 +10,7 @@ namespace Rynchodon.Utility
 	{
 
 		private char[] splitters = { ' ' };
-		private Help m_help = new Help();
+		//private Help m_help = new Help();
 
 		public ChatHandler()
 		{
@@ -43,9 +43,9 @@ namespace Rynchodon.Utility
 			string remainder = split.Length < 3 ? null : split[2];
 			switch (split[1])
 			{
-				case "help":
-					m_help.printCommand(remainder);
-					return;
+				//case "help":
+				//	m_help.printCommand(remainder);
+				//	return;
 				case "set":
 					UserSettings.SetSetting(remainder);
 					return;
@@ -64,6 +64,7 @@ namespace Rynchodon.Utility
 			StringBuilder display = new StringBuilder();
 
 			display.AppendLine("Server settings:");
+			Append<bool>(display, ServerSettings.SettingName.bAirResistanceBeta);
 			Append<bool>(display, ServerSettings.SettingName.bAllowAutopilot);
 			Append<bool>(display, ServerSettings.SettingName.bAllowGuidedMissile);
 			Append<bool>(display, ServerSettings.SettingName.bAllowHacker);

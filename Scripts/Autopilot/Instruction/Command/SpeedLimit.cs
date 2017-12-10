@@ -52,12 +52,10 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-            IMyTerminalControlSlider speed = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyShipController>("Speed");
-            speed.Title = MyStringId.GetOrCompute("Speed");
-               speed.Tooltip = MyStringId.GetOrCompute(AddDescription);
-			//speed.DefaultValue = ServerSettings.GetSetting<float>(ServerSettings.SettingName.fDefaultSpeed);
-			//speed.Normalizer = Normalizer;
-			//speed.Denormalizer = Denormalizer;
+			MyTerminalControlSlider<MyShipController> speed = new MyTerminalControlSlider<MyShipController>("Speed", MyStringId.GetOrCompute("Speed"), MyStringId.GetOrCompute(AddDescription));
+			speed.DefaultValue = ServerSettings.GetSetting<float>(ServerSettings.SettingName.fDefaultSpeed);
+			speed.Normalizer = Normalizer;
+			speed.Denormalizer = Denormalizer;
 			speed.Writer = (block, sb) => {
 				sb.Append(PrettySI.makePretty(m_speed));
 				sb.Append("m/s");
@@ -68,7 +66,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			controls.Add(speed);
 		}
 
-		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			if (!PrettySI.TryParse(command, out m_speed))
 			{

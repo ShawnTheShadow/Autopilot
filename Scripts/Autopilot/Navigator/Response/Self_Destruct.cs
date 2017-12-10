@@ -1,5 +1,6 @@
 using System.Text;
 using Rynchodon.Attached;
+using Rynchodon.Utility;
 using Sandbox.Common.ObjectBuilders;
 using VRage.Game.ModAPI;
 
@@ -7,14 +8,13 @@ namespace Rynchodon.Autopilot.Navigator
 {
 	public class Self_Destruct : IEnemyResponse
 	{
-
-		private readonly Logger m_logger;
 		private readonly IMyCubeBlock m_block;
 		private bool m_countingDown;
 
+		private Logable Log { get { return new Logable(m_block); } }
+
 		public Self_Destruct(IMyCubeBlock block)
 		{
-			this.m_logger = new Logger(block);
 			this.m_block = block;
 		}
 
@@ -33,18 +33,18 @@ namespace Rynchodon.Autopilot.Navigator
 			if (enemy == null)
 				return;
 
-			AttachedGrid.RunOnAttached(m_block.CubeGrid, AttachedGrid.AttachmentKind.Terminal, grid => {
-				var warheads = CubeGridCache.GetFor(grid).GetBlocksOfType(typeof(MyObjectBuilder_Warhead));
-				if (warheads != null)
-					foreach (var war in warheads)
-						if (m_block.canControlBlock(war))
-						{
-							m_logger.debugLog("Starting countdown for " + war.getBestName(), Logger.severity.DEBUG);
-							war.ApplyAction("StartCountdown");
-						}
-				return false;
-			}, true);
-
+			foreach (IMyCubeGrid grid in AttachedGrid.AttachedGrids(m_block.CubeGrid, AttachedGrid.AttachmentKind.Terminal, true))
+			{
+				CubeGridCache cache = CubeGridCache.GetFor(grid);
+				if (cache == null)
+					continue;
+				foreach (IMyCubeBlock warhead in cache.BlocksOfType(typeof(MyObjectBuilder_Warhead)))
+					if (m_block.canControlBlock(warhead))
+					{
+						Log.DebugLog("Starting countdown for " + warhead.getBestName(), Logger.severity.DEBUG);
+						warhead.ApplyAction("StartCountdown");
+					}
+			}
 			m_countingDown = true;
 		}
 

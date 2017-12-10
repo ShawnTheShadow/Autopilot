@@ -6,7 +6,6 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using VRage.Utils;
-using Sandbox.ModAPI;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
@@ -41,24 +40,20 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			get { return "Weld the ship: " + m_target + (m_fetch ? ", fetching components" : string.Empty); }
 		}
 
-		public override void AddControls(List<IMyTerminalControl> controls)
+		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-            IMyTerminalControlTextbox gridName = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("GridName");
-            gridName.Title = MyStringId.GetOrCompute("Grid");
-            gridName.Tooltip = MyStringId.GetOrCompute("Weld the specified grid");
+			MyTerminalControlTextbox<MyShipController> gridName = new MyTerminalControlTextbox<MyShipController>("GridName", MyStringId.GetOrCompute("Grid"), MyStringId.GetOrCompute("Weld the specified grid"));
 			gridName.Getter = block => m_target;
 			gridName.Setter = (block, value) => m_target = value;
 			controls.Add(gridName);
 
-            IMyTerminalControlCheckbox fetch = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyShipController>("FetchComponents");
-            fetch.Title = MyStringId.GetOrCompute("Fetch components");
-            fetch.Tooltip = MyStringId.GetOrCompute("Fetch components the next time the ship lands");
+			IMyTerminalControlCheckbox fetch = new MyTerminalControlCheckbox<MyShipController>("FetchComponents", MyStringId.GetOrCompute("Fetch components"), MyStringId.GetOrCompute("Fetch components the next time the ship lands"));
 			fetch.Getter = block => m_fetch;
 			fetch.Setter = (block, value) => m_fetch = value;
 			controls.Add(fetch);
 		}
 
-		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			if (string.IsNullOrWhiteSpace(command))
 			{

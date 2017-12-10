@@ -1,10 +1,11 @@
 using System;
 using System.Text;
 using Rynchodon.Autopilot.Data;
-using Rynchodon.Autopilot.Movement;
+using Rynchodon.Autopilot.Pathfinding;
+using Rynchodon.Utility;
 using Sandbox.ModAPI;
 using VRageMath;
-using SpaceEngineers.Game.ModAPI;
+using Ingame = SpaceEngineers.Game.ModAPI.Ingame;
 
 namespace Rynchodon.Autopilot.Navigator
 {
@@ -14,25 +15,24 @@ namespace Rynchodon.Autopilot.Navigator
 	public class Facer : NavigatorRotator
 	{
 
-		private readonly Logger m_logger;
 		private readonly PseudoBlock m_pseudoBlock;
 		private readonly IMyLaserAntenna m_laser;
 
-		/// <param name="mover">The mover to use</param>
+		private Logable Log { get { return new Logable(m_controlBlock?.CubeBlock); } }
+
+		/// <param name="pathfinder">The mover to use</param>
 		/// 
 		/// <param name="rotBlock">The block to rotate</param>
-		public Facer(Mover mover, PseudoBlock rotBlock)
-			: base(mover)
+		public Facer(Pathfinder pathfinder, PseudoBlock rotBlock)
+			: base(pathfinder)
 		{
-			this.m_logger = new Logger(m_controlBlock.CubeBlock);
-
 			this.m_pseudoBlock = rotBlock;
 			this.m_laser = rotBlock.Block as IMyLaserAntenna;
 			if (this.m_laser == null)
 			{
-				if (!(rotBlock.Block is IMySolarPanel) && !(rotBlock.Block is IMyOxygenFarm))
+				if (!(rotBlock.Block is Ingame.IMySolarPanel) && !(rotBlock.Block is Ingame.IMyOxygenFarm))
 				{
-					m_logger.alwaysLog("Block is of wrong type: " + rotBlock.Block.DisplayNameText, Logger.severity.FATAL);
+					Log.AlwaysLog("Block is of wrong type: " + rotBlock.Block.DisplayNameText, Logger.severity.FATAL);
 					throw new Exception("Block is of wrong type: " + rotBlock.Block.DisplayNameText);
 				}
 			}

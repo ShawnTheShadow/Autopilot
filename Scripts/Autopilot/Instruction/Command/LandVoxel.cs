@@ -5,7 +5,6 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using VRage.Utils;
-using Sandbox.ModAPI;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
@@ -43,13 +42,8 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-            IMyTerminalControlCheckbox asteroid = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyShipController>("LandAsteroid");
-            asteroid.Title = MyStringId.GetOrCompute("Asteroid");
-            asteroid.Tooltip = MyStringId.GetOrCompute("Land on the nearest asteroid");
-
-            IMyTerminalControlCheckbox planet = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlCheckbox, IMyShipController>("LandPlanet");
-            planet.Title = MyStringId.GetOrCompute("Planet");
-            planet.Tooltip = MyStringId.GetOrCompute("Land on the nearest planet");
+			IMyTerminalControlCheckbox asteroid = new MyTerminalControlCheckbox<MyShipController>("LandAsteroid", MyStringId.GetOrCompute("Asteroid"), MyStringId.GetOrCompute("Land on the nearest asteroid"));
+			IMyTerminalControlCheckbox planet = new MyTerminalControlCheckbox<MyShipController>("LandPlanet", MyStringId.GetOrCompute("Planet"), MyStringId.GetOrCompute("Land on the nearest planet"));
 
 			asteroid.Getter = block => m_target == Target.asteroid;
 			planet.Getter = block => m_target == Target.planet;
@@ -66,7 +60,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			controls.Add(planet);
 		}
 
-		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			if (Enum.TryParse(command, true, out m_target))
 			{

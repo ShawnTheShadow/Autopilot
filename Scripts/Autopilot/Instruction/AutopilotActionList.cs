@@ -1,6 +1,6 @@
-﻿using System;
-using System.Collections;
-using Rynchodon.Autopilot.Movement;
+﻿using System.Collections;
+using System.Runtime.CompilerServices;
+using Rynchodon.Autopilot.Pathfinding;
 
 namespace Rynchodon.Autopilot.Instruction
 {
@@ -8,17 +8,13 @@ namespace Rynchodon.Autopilot.Instruction
 	{
 
 		private const int MaxIndex = 1000, MaxDepth = 10;
-
-		static AutopilotActionList()
-		{
-			Logger.SetFileName("AutopilotActionList");
-		}
+		public delegate void AutopilotAction(Pathfinder pathfinder);
 
 		private readonly ArrayList m_mainList = new ArrayList();
 		private int m_mainListIndex;
 		private AutopilotActionList m_sublist;
 
-		public Action<Mover> Current { get; private set; }
+		public AutopilotAction Current { get; private set; }
 		public int CurrentIndex { get; private set; }
 		public bool IsEmpty { get { return m_mainList.Count == 0; } }
 
@@ -27,14 +23,16 @@ namespace Rynchodon.Autopilot.Instruction
 			Reset();
 		}
 
-		public void Add(Action<Mover> item)
+		public void Add(AutopilotAction item)
 		{
 			m_mainList.Add(item);
+			m_mainListIndex = int.MaxValue;
 		}
 
 		public void Add(TextPanelMonitor item)
 		{
 			m_mainList.Add(item);
+			m_mainListIndex = int.MaxValue;
 		}
 
 		public void Clear()
@@ -51,6 +49,12 @@ namespace Rynchodon.Autopilot.Instruction
 
 		private bool MoveNext(ref int depth)
 		{
+			if (m_mainListIndex == int.MaxValue)
+			{
+				Logger.AlwaysLog("List was not reset since last addition", Logger.severity.ERROR);
+				Reset();
+				return false;
+			}
 			CurrentIndex++;
 			depth++;
 			if (CurrentIndex > MaxIndex)
@@ -76,12 +80,13 @@ namespace Rynchodon.Autopilot.Instruction
 			m_mainListIndex++;
 			if (m_mainListIndex >= m_mainList.Count)
 			{
+				Logger.DebugLog("End of main list, m_mainListIndex: " + m_mainListIndex + ", m_mainList.Count: " + m_mainList.Count);
 				Current = null;
 				return false;
 			}
 
 			object element = m_mainList[m_mainListIndex];
-			Current = element as Action<Mover>;
+			Current = element as AutopilotAction;
 			if (Current != null)
 			{
 				Logger.DebugLog("CurrentIndex: " + CurrentIndex + ", m_mainListIndex: " + m_mainListIndex);
@@ -89,14 +94,15 @@ namespace Rynchodon.Autopilot.Instruction
 			}
 
 			TextPanelMonitor monitor = (TextPanelMonitor)element;
+			Logger.DebugLog("Resting sublist: " + monitor.TextPanel.nameWithId());
 			m_sublist = monitor.AutopilotActions;
 			m_sublist.Reset();
 			return MoveNext(ref depth);
 		}
 
-		public void Reset()
+		public void Reset([CallerMemberName] string caller = null)
 		{
-			Logger.DebugLog("entered");
+			Logger.DebugLog("entered from " + caller);
 			m_sublist = null;
 			CurrentIndex = m_mainListIndex = -1;
 		}

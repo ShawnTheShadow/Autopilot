@@ -51,12 +51,10 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-            IMyTerminalControlSlider distance = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlSlider, IMyShipController>("Distance");
-            distance.Title = MyStringId.GetOrCompute("Distance");
-            distance.Tooltip = MyStringId.GetOrCompute(AddDescription);
-			//distance.DefaultValue = 100f;
-			//distance.Normalizer = Normalizer;
-			//distance.Denormalizer = Denormalizer;
+			MyTerminalControlSlider<MyShipController> distance = new MyTerminalControlSlider<MyShipController>("Distance", MyStringId.GetOrCompute("Distance"), MyStringId.GetOrCompute(AddDescription));
+			distance.DefaultValue = 100f;
+			distance.Normalizer = Normalizer;
+			distance.Denormalizer = Denormalizer;
 			distance.Writer = (block, sb) => {
 				sb.Append(PrettySI.makePretty(m_distance));
 				sb.Append('m');
@@ -67,7 +65,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			controls.Add(distance);
 		}
 
-		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			if (!PrettySI.TryParse(command, out m_distance))
 			{

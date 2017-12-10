@@ -5,24 +5,17 @@ namespace Rynchodon.Attached
 {
 	public class Connector : AttachableBlockUpdate
 	{
-		private readonly Logger myLogger;
-
 		public Connector(IMyCubeBlock block)
 			: base(block, AttachedGrid.AttachmentKind.Connector)
-		{
-			myLogger = new Logger(block);
-		}
+		{ }
 
-		protected override AttachableBlockBase GetPartner()
+		protected override IMyCubeBlock GetPartner()
 		{
-			IMyShipConnector myConn = myBlock as IMyShipConnector;
-			if (!myConn.IsConnected)
+			IMyShipConnector myConn = (IMyShipConnector)myBlock;
+			if (myConn.Status != Sandbox.ModAPI.Ingame.MyShipConnectorStatus.Connected)
 				return null;
 
-			IMyShipConnector other = myConn.OtherConnector;
-			if (other == null)
-				return null;
-			return GetPartner(other.EntityId);
+			return myConn.OtherConnector;
 		}
 	}
 }

@@ -2,9 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using Rynchodon.Autopilot.Harvest;
-using Rynchodon.Autopilot.Navigator;
+using Rynchodon.Autopilot.Navigator.Mining;
 using Sandbox.Definitions;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
@@ -41,11 +40,6 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 			public string LongName { get { return MinedOre != null ? SubtypeName + " (" + MinedOre + ')' : SubtypeName; } }
 			public string ShortName { get { return Symbol ?? SubtypeName; } }
-		}
-
-		static HarvestVoxel()
-		{
-			Logger.SetFileName("HarvestVoxel");
 		}
 
 		private Ore[] value_allOres;
@@ -128,9 +122,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 		{
 			if (m_oreListbox == null)
 			{
-                m_oreListbox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyShipController>("Ores");
-                m_oreListbox.Title = MyStringId.GetOrCompute("Ores");
-                m_oreListbox.Tooltip = MyStringId.NullOrEmpty;
+				m_oreListbox = new MyTerminalControlListbox<MyShipController>("Ores", MyStringId.GetOrCompute("Ores"), MyStringId.NullOrEmpty);
 				m_oreListbox.ListContent = ListContent;
 				m_oreListbox.ItemSelected = ItemSelected;
 			}
@@ -138,40 +130,14 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 			if (!m_addingOres)
 			{
-                IMyTerminalControlButton ctrl_btn;
-
-                //controls.Add(new MyTerminalControlButton<MyShipController>("AddOre", MyStringId.GetOrCompute("Add Ore"), MyStringId.NullOrEmpty, AddOre));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl< IMyTerminalControlButton, IMyShipController>("AddOre");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Add Ore");
-                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
-                ctrl_btn.Action = AddOre;
-                controls.Add(ctrl_btn);
-
-                //controls.Add(new MyTerminalControlButton<MyShipController>("RemoveOre", MyStringId.GetOrCompute("Remove Ore"), MyStringId.NullOrEmpty, RemoveOre));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("RemoveOre");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Remove Ore");
-                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
-                ctrl_btn.Action = RemoveOre;
-                controls.Add(ctrl_btn);
-
-                //controls.Add(new MyTerminalControlButton<MyShipController>("MoveOreUp", MyStringId.GetOrCompute("Move Ore Up"), MyStringId.NullOrEmpty, MoveOreUp));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("MoveOreUp");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Move Ore Up");
-                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
-                ctrl_btn.Action = MoveOreUp;
-                    controls.Add(ctrl_btn);
-
-                //controls.Add(new MyTerminalControlButton<MyShipController>("MoveOreDown", MyStringId.GetOrCompute("Move Ore Down"), MyStringId.NullOrEmpty, MoveOreDown));
-                ctrl_btn = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("MoveOreDown");
-                ctrl_btn.Title = MyStringId.GetOrCompute("Move Ore Down");
-                ctrl_btn.Tooltip = MyStringId.NullOrEmpty;
-                ctrl_btn.Action = MoveOreDown;
-                    controls.Add(ctrl_btn); 
-
-            }
+				controls.Add(new MyTerminalControlButton<MyShipController>("AddOre", MyStringId.GetOrCompute("Add Ore"), MyStringId.NullOrEmpty, AddOre));
+				controls.Add(new MyTerminalControlButton<MyShipController>("RemoveOre", MyStringId.GetOrCompute("Remove Ore"), MyStringId.NullOrEmpty, RemoveOre));
+				controls.Add(new MyTerminalControlButton<MyShipController>("MoveOreUp", MyStringId.GetOrCompute("Move Ore Up"), MyStringId.NullOrEmpty, MoveOreUp));
+				controls.Add(new MyTerminalControlButton<MyShipController>("MoveOreDown", MyStringId.GetOrCompute("Move Ore Down"), MyStringId.NullOrEmpty, MoveOreDown));
+			}
 		}
 
-		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			byte[] oreType;
 
@@ -191,14 +157,15 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 				foreach (string name in splitComma)
 				{
+					string trimmed = name.Trim();
 					Ore ore;
-					if (!TryGetOre(name, out ore))
+					if (!TryGetOre(trimmed, out ore))
 					{
 						message = "Not ore: " + name;
 						return null;
 					}
 					byte[] oreIds;
-					if (!OreDetector.TryGetMaterial(name, out oreIds))
+					if (!OreDetector.TryGetMaterial(trimmed, out oreIds))
 					{
 						message = "Failed to get material index: " + name;
 						return null;
@@ -211,7 +178,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			}
 
 			message = null;
-			return mover => new MinerVoxel(mover, oreType);
+			return mover => new Miner(mover, oreType);
 		}
 
 		protected override string TermToString()
@@ -250,7 +217,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 					throw new Exception("Selected item not found in all ores. Selected item: " + selected[0].Text.ToString());
 				m_activeOres.Add(ore);
 				m_addingOres = false;
-				autopilot.SwitchTerminalTo();
+				autopilot.RebuildControls();
 				return;
 			}
 
@@ -265,7 +232,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 		private void AddOre(IMyTerminalBlock block)
 		{
 			m_addingOres = true;
-			block.SwitchTerminalTo();
+			block.RebuildControls();
 		}
 
 		private void RemoveOre(IMyTerminalBlock block)
@@ -343,7 +310,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 		private bool TryGetOre(string name, out Ore ore)
 		{
 			foreach (Ore o in m_allOres)
-				if (o.SubtypeName == name || o.MinedOre == name || o.Symbol == name)
+				if (o.SubtypeName.Equals(name, StringComparison.InvariantCultureIgnoreCase) || o.MinedOre != null && o.MinedOre.Equals(name, StringComparison.InvariantCultureIgnoreCase) || o.Symbol.Equals(name, StringComparison.InvariantCultureIgnoreCase))
 				{
 					ore = o;
 					return true;

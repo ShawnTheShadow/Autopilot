@@ -10,12 +10,12 @@
       <DisplayName>Cruise Missile R12VP</DisplayName>
       <Description>
         GuidanceSeconds=90;
+        Acceleration=25;
         RotationPerUpdate=0.017453292519943;
-        RadarReflectivity=0.067;
         DetonateRange=3;
       </Description>
       <BasicProperties>
-        <DesiredSpeed>200</DesiredSpeed>
+        <DesiredSpeed>400</DesiredSpeed>
         <SpeedVariance>0</SpeedVariance>
         <MaxTrajectory>12000</MaxTrajectory>
         <IsExplosive>true</IsExplosive>
@@ -23,12 +23,12 @@
       </BasicProperties>
       <MissileProperties>
         <MissileMass>3000</MissileMass>
-        <MissileExplosionRadius>15</MissileExplosionRadius>
+        <MissileExplosionRadius>10</MissileExplosionRadius>
         <MissileModelName>Models\Weapons\Souper_R12VP_Missile.mwm</MissileModelName>
-        <MissileAcceleration>10</MissileAcceleration>
+        <MissileAcceleration>25</MissileAcceleration>
         <MissileInitialSpeed>10</MissileInitialSpeed>
         <MissileSkipAcceleration>false</MissileSkipAcceleration>
-        <MissileExplosionDamage>10000</MissileExplosionDamage>
+        <MissileExplosionDamage>30000</MissileExplosionDamage>
       </MissileProperties>
     </Ammo>
 
@@ -42,14 +42,13 @@
         GuidanceSeconds=60;
         Acceleration=100;
         RotationPerUpdate=0.017453292519943;
-        RadarReflectivity=0.053;
         HasAntenna=true;
         DetonateRange=3;
         EMP_Strength=300000;
         EMP_Seconds=30;
       </Description>
       <BasicProperties>
-        <DesiredSpeed>200</DesiredSpeed>
+        <DesiredSpeed>600</DesiredSpeed>
         <SpeedVariance>0</SpeedVariance>
         <MaxTrajectory>8000</MaxTrajectory>
         <IsExplosive>true</IsExplosive>
@@ -71,18 +70,18 @@
         <TypeId>AmmoDefinition</TypeId>
         <SubtypeId>Souper_B3MP_Missile</SubtypeId>
       </Id>
-      <DisplayName>18x Swarm Missile B3MP</DisplayName>
+      <DisplayName>18x Swarm Missile B5MP</DisplayName>
       <Description>
         GuidanceSeconds=15;
         Acceleration=100;
         RotationPerUpdate=0.01;
-        RadarReflectivity=0.081;
+        HasAntenna=true;
         ClusterCooldown=5;
       </Description>
       <BasicProperties>
         <DesiredSpeed>800</DesiredSpeed>
         <SpeedVariance>0</SpeedVariance>
-        <MaxTrajectory>3000</MaxTrajectory>
+        <MaxTrajectory>5000</MaxTrajectory>
         <IsExplosive>true</IsExplosive>
         <BackkickForce>700</BackkickForce>
       </BasicProperties>
@@ -102,18 +101,18 @@
         <TypeId>AmmoDefinition</TypeId>
         <SubtypeId>Souper_R1VT_Interceptor_Missile</SubtypeId>
       </Id>
-      <DisplayName>Interceptor Missile R1VT</DisplayName>
+      <DisplayName>Interceptor Missile R3VT</DisplayName>
       <Description>
         GuidanceSeconds=15;
         AcquisitionAngle=0.5;
-        Acceleration=100;
+        Acceleration=400;
         TargetRange=800;
         DetonateRange=10;
       </Description>
       <BasicProperties>
-        <DesiredSpeed>1000</DesiredSpeed>
+        <DesiredSpeed>1500</DesiredSpeed>
         <SpeedVariance>0</SpeedVariance>
-        <MaxTrajectory>2000</MaxTrajectory>
+        <MaxTrajectory>3000</MaxTrajectory>
         <IsExplosive>true</IsExplosive>
         <BackkickForce>70</BackkickForce>
       </BasicProperties>

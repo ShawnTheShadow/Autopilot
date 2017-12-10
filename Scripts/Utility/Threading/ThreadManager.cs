@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using Rynchodon.Utility;
+using Rynchodon.Utility.Collections;
 using Sandbox.ModAPI;
-using VRage;
 
 namespace Rynchodon.Threading
 {
@@ -10,22 +10,28 @@ namespace Rynchodon.Threading
 
 		private const int QueueOverflow = 1000000;
 
-		private readonly Logger myLogger = new Logger();
+		private static readonly int StaticMaxParallel;
+		private static int StaticParallel;
+		private static readonly FastResourceLock lock_parallelTasks = new FastResourceLock();
+
+		static ThreadManager()
+		{
+			StaticMaxParallel = Math.Max(Environment.ProcessorCount - 2, 1);
+		}
 
 		private readonly bool Background;
 		private readonly string ThreadName;
 
-		private readonly FastResourceLock lock_parallelTasks = new FastResourceLock();
-
-		private LockedQueue<Action> ActionQueue = new LockedQueue<Action>(8);
+		private LockedDeque<Action> ActionQueue = new LockedDeque<Action>(8);
 
 		public readonly byte AllowedParallel;
 
 		public byte ParallelTasks { get; private set; }
 
+		private Logable Log { get { return new Logable(ThreadName ?? string.Empty, ParallelTasks.ToString()); } }
+
 		public ThreadManager(byte AllowedParallel = 1, bool background = false, string threadName = null)
 		{
-			this.myLogger = new Logger(() => threadName ?? string.Empty, () => ParallelTasks.ToString());
 			this.AllowedParallel = AllowedParallel;
 			this.Background = background;
 			this.ThreadName = threadName;
@@ -41,16 +47,22 @@ namespace Rynchodon.Threading
 
 		public void EnqueueAction(Action toQueue)
 		{
-			ActionQueue.Enqueue(toQueue);
+			if (Globals.WorldClosed)
+			{
+				Log.DebugLog("Cannot enqueue, world is closed");
+				return;
+			}
+
+			ActionQueue.AddTail(toQueue);
 			VRage.Exceptions.ThrowIf<Exception>(ActionQueue.Count > QueueOverflow, "queue is too long");
 
-			if (ParallelTasks >= AllowedParallel)
+			if (ParallelTasks >= AllowedParallel || StaticParallel >= StaticMaxParallel)
 				return;
 
 			MyAPIGateway.Utilities.InvokeOnGameThread(() => {
 				if (MyAPIGateway.Parallel == null)
 				{
-					myLogger.debugLog("Parallel == null", Logger.severity.WARNING);
+					Log.DebugLog("Parallel == null", Logger.severity.WARNING);
 					return;
 				}
 
@@ -61,39 +73,40 @@ namespace Rynchodon.Threading
 			});
 		}
 
-		public void EnqueueIfIdle(Action toQueue)
-		{
-			if (ActionQueue.Count == 0)
-				EnqueueAction(toQueue);
-		}
-
 		private void Run()
 		{
 			using (lock_parallelTasks.AcquireExclusiveUsing())
 			{
-				if (ParallelTasks >= AllowedParallel)
+				if (ParallelTasks >= AllowedParallel || StaticParallel >= StaticMaxParallel)
 					return;
 				ParallelTasks++;
+				StaticParallel++;
 			}
 			try
 			{
 				if (ThreadName != null)
 					ThreadTracker.ThreadName = ThreadName + '(' + ThreadTracker.ThreadNumber + ')';
 				Action currentItem;
-				while (ActionQueue.TryDequeue(out currentItem))
+				while (ActionQueue.TryPopTail(out currentItem))
 				{
 					if (currentItem != null)
-						//currentItem.Invoke();
-						Profiler.Profile(currentItem);
+					{
+						Profiler.StartProfileBlock(currentItem);
+						currentItem.Invoke();
+						Profiler.EndProfileBlock();
+					}
 					else
-						myLogger.debugLog("null action", Logger.severity.WARNING);
+						Log.DebugLog("null action", Logger.severity.WARNING);
 				}
 			}
-			catch (Exception ex) { myLogger.alwaysLog("Exception: " + ex, Logger.severity.ERROR); }
+			catch (Exception ex) { Log.AlwaysLog("Exception: " + ex, Logger.severity.ERROR); }
 			finally
 			{
 				using (lock_parallelTasks.AcquireExclusiveUsing())
+				{
 					ParallelTasks--;
+					StaticParallel--;
+				}
 				ThreadTracker.ThreadName = null;
 			}
 		}

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Rynchodon.Attached;
+using Rynchodon.Autopilot.Pathfinding;
 using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
@@ -10,17 +11,11 @@ using Sandbox.ModAPI.Interfaces.Terminal;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRage.Utils;
-using VRageMath;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
 	public abstract class TerminalProperty<T> : ACommand
 	{
-
-		static TerminalProperty()
-		{
-			Logger.SetFileName("TerminalProperty");
-		}
 
 		protected StringBuilder m_targetBlock;
 		// don't save the actual property, as string is more consistent when commands are sent over network
@@ -52,23 +47,18 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-            IMyTerminalControlTextbox textBox = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("BlockName");
-            textBox.Title = MyStringId.GetOrCompute("Block name");
-            textBox.Tooltip = MyStringId.GetOrCompute("Blocks with names containing this string will have their property set.");
-            textBox.Getter = block => m_targetBlock;
+			MyTerminalControlTextbox<MyShipController> textBox = new MyTerminalControlTextbox<MyShipController>("BlockName", MyStringId.GetOrCompute("Block name"),
+				MyStringId.GetOrCompute("Blocks with names containing this string will have their property set."));
+			textBox.Getter = block => m_targetBlock;
 			textBox.Setter = (block, value) => m_targetBlock = value;
 			controls.Add(textBox);
 
-            IMyTerminalControlListbox propertyList = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlListbox, IMyShipController>("PropertyList");
-            propertyList.Title = MyStringId.GetOrCompute("Property");
-            propertyList.Tooltip = MyStringId.NullOrEmpty;
+			IMyTerminalControlListbox propertyList = new MyTerminalControlListbox<MyShipController>("PropertyList", MyStringId.GetOrCompute("Property"), MyStringId.NullOrEmpty);
 			propertyList.ListContent = ListContent;
 			propertyList.ItemSelected = ItemSelected;
 
-            IMyTerminalControlButton searchButton = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, IMyShipController>("SearchButton");
-            searchButton.Title = MyStringId.GetOrCompute("Search");
-            searchButton.Tooltip = MyStringId.GetOrCompute("Search for properties");
-            searchButton.Action = block => propertyList.UpdateVisual();
+			MyTerminalControlButton<MyShipController> searchButton = new MyTerminalControlButton<MyShipController>("SearchButton", MyStringId.GetOrCompute("Search"),
+				MyStringId.GetOrCompute("Search for properties"), block => propertyList.UpdateVisual());
 
 			controls.Add(searchButton);
 			controls.Add(propertyList);
@@ -78,7 +68,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		protected abstract void AddValueControl(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls);
 
-		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			string[] split = command.Split(',');
 			if (split.Length != 3)
@@ -153,28 +143,27 @@ namespace Rynchodon.Autopilot.Instruction.Command
 				m_termProp = ((ITerminalProperty<T>)selected[0].UserData).Id;
 		}
 
-		protected void SetPropertyOfBlock(Movement.Mover mover, string blockName, string propName, T propValue)
+		protected void SetPropertyOfBlock(Pathfinder pathfinder, string blockName, string propName, T propValue)
 		{
 			blockName = blockName.LowerRemoveWhitespace();
 			propName = propName.Trim(); // leave spaces in propName
 
-			AttachedGrid.RunOnAttachedBlock(mover.Block.CubeGrid, AttachedGrid.AttachmentKind.Permanent, block => {
-				IMyCubeBlock fatblock = block.FatBlock;
-				if (fatblock == null || !(fatblock is IMyTerminalBlock))
-					return false;
+			foreach (IMyCubeBlock fatblock in AttachedGrid.AttachedCubeBlocks(pathfinder.Mover.Block.CubeGrid, AttachedGrid.AttachmentKind.Permanent, true))
+			{
+				if (!(fatblock is IMyTerminalBlock))
+					continue;
 
-				if (!mover.Block.Controller.canControlBlock(fatblock))
-					return false;
+				if (!pathfinder.Mover.Block.Controller.canControlBlock(fatblock))
+					continue;
 
 				if (!fatblock.DisplayNameText.LowerRemoveWhitespace().Contains(blockName))
-					return false;
+					continue;
 
 				IMyTerminalBlock terminalBlock = fatblock as IMyTerminalBlock;
 				ITerminalProperty<T> property = terminalBlock.GetProperty(propName) as ITerminalProperty<T>;
 				if (property != null)
 					property.SetValue(fatblock, propValue);
-				return false;
-			}, true);
+			}
 		}
 
 	}

@@ -1,12 +1,19 @@
 using System;
 using Rynchodon.AntennaRelay;
-using Sandbox.ModAPI;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRageMath;
 
 namespace Rynchodon.Weapons
 {
+	public static class TargetExtensions
+	{
+		public static bool IsNull(this Target t)
+		{
+			return t == null || t.Entity == null;
+		}
+	}
+
 	public abstract class Target
 	{
 
@@ -42,15 +49,14 @@ namespace Rynchodon.Weapons
 
 		public override Vector3D GetPosition()
 		{
-			VRage.Exceptions.ThrowIf<NotImplementedException>(true);
-			throw new Exception();
+			throw new InvalidOperationException();
 		}
 
 		public override Vector3 GetLinearVelocity()
 		{
-			VRage.Exceptions.ThrowIf<NotImplementedException>(true);
-			throw new Exception();
+			throw new InvalidOperationException();
 		}
+
 	}
 
 	public class TurretTarget : Target
@@ -83,6 +89,7 @@ namespace Rynchodon.Weapons
 		{
 			return value_entity.GetLinearVelocity();
 		}
+
 	}
 
 	public class LastSeenTarget : Target
@@ -105,6 +112,7 @@ namespace Rynchodon.Weapons
 
 		public void Update(LastSeen seen, IMyCubeBlock block = null)
 		{
+			Logger.DebugLog("Different entity", Logger.severity.ERROR, condition: seen.Entity != m_lastSeen.Entity);
 			m_lastSeen = seen;
 			if (block != null)
 				m_block = block;

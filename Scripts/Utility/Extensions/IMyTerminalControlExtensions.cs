@@ -6,10 +6,12 @@ namespace Rynchodon
 {
 	public static class IMyTerminalControlExtensions
 	{
+
 		public static void SetEnabledAndVisible(this IMyTerminalControl control, Func<IMyTerminalBlock, bool> function)
 		{
 			control.Enabled = function;
 			control.Visible = function;
 		}
+
 	}
 }

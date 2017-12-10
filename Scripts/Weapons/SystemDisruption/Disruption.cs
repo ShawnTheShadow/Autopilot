@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Xml.Serialization;
 using Rynchodon.Update;
+using Rynchodon.Utility;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
-using VRage;
 using VRage.Game;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
@@ -33,19 +33,12 @@ namespace Rynchodon.Weapons.SystemDisruption
 		public static HashSet<Disruption> AllDisruptions = new HashSet<Disruption>();
 		private static HashSet<IMyCubeBlock> m_allAffected = new HashSet<IMyCubeBlock>();
 
-		static Disruption()
+		[OnWorldClose]
+		private static void Unload()
 		{
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
+			AllDisruptions.Clear();
+			m_allAffected.Clear();
 		}
-
-		static void Entities_OnCloseAll()
-		{
-			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
-			AllDisruptions = null;
-			m_allAffected = null;
-		}
-
-		protected Logger m_logger { get; private set; }
 
 		private long m_effectOwner;
 
@@ -70,11 +63,9 @@ namespace Rynchodon.Weapons.SystemDisruption
 		/// <param name="effectOwner">The owner of the disruption.</param>
 		public void Start(IMyCubeGrid grid, TimeSpan duration, ref float strength, long effectOwner)
 		{
-			this.m_logger = new Logger(() => grid.DisplayName);
-
 			if (strength < MinCost)
 			{
-				m_logger.debugLog("strength: " + strength + ", below minimum: " + MinCost);
+				Logger.DebugLog("strength: " + strength + ", below minimum: " + MinCost);
 				return;
 			}
 
@@ -85,46 +76,40 @@ namespace Rynchodon.Weapons.SystemDisruption
 			m_effectOwner = effectOwner;
 			foreach (MyObjectBuilderType type in BlocksAffected)
 			{
-				var blockGroup = cache.GetBlocksOfType(type);
-				if (blockGroup != null && blockGroup.Count != 0)
+				foreach (IMyCubeBlock block in cache.BlocksOfType(type).OrderBy(OrderBy))
 				{
-					foreach (IMyCubeBlock block in blockGroup.OrderBy(OrderBy))
+					if (!block.IsWorking || m_allAffected.Contains(block))
 					{
-						if (!block.IsWorking || m_allAffected.Contains(block))
-						{
-							m_logger.debugLog("cannot disrupt: " + block);
-							continue;
-						}
-						float cost = BlockCost(block);
-						if (cost > strength)
-						{
-							m_logger.debugLog("cannot disrupt block: " + block + ", cost: " + cost + " is greater than strength available: " + strength);
-							continue;
-						}
-
-						StartEffect(block);
-						m_logger.debugLog("disrupting: " + block + ", cost: " + cost + ", remaining strength: " + strength);
-						strength -= cost;
-						applied += cost;
-						MyCubeBlock cubeBlock = block as MyCubeBlock;
-						MyIDModule idMod = new MyIDModule() { Owner = cubeBlock.IDModule.Owner, ShareMode = cubeBlock.IDModule.ShareMode };
-						m_affected.Add(block, idMod);
-						m_allAffected.Add(block);
-
-						block.SetDamageEffect(true);
-						cubeBlock.ChangeOwner(effectOwner, MyOwnershipShareModeEnum.Faction);
-
-						if (strength < MinCost)
-							goto FinishedBlocks;
+						Logger.DebugLog("cannot disrupt: " + block);
+						continue;
 					}
+					float cost = BlockCost(block);
+					if (cost > strength)
+					{
+						Logger.DebugLog("cannot disrupt block: " + block + ", cost: " + cost + " is greater than strength available: " + strength);
+						continue;
+					}
+
+					StartEffect(block);
+					Logger.DebugLog("disrupting: " + block + ", cost: " + cost + ", remaining strength: " + strength);
+					strength -= cost;
+					applied += cost;
+					MyCubeBlock cubeBlock = block as MyCubeBlock;
+					MyIDModule idMod = new MyIDModule() { Owner = cubeBlock.IDModule.Owner, ShareMode = cubeBlock.IDModule.ShareMode };
+					m_affected.Add(block, idMod);
+					m_allAffected.Add(block);
+
+					block.SetDamageEffect(true);
+					cubeBlock.ChangeOwner(effectOwner, MyOwnershipShareModeEnum.Faction);
+
+					if (strength < MinCost)
+						goto FinishedBlocks;
 				}
-				else
-					m_logger.debugLog("no blocks of type: " + type);
 			}
 FinishedBlocks:
 			if (m_affected.Count != 0)
 			{
-				m_logger.debugLog("Added new effect, strength: " + applied);
+				Logger.DebugLog("Added new effect, strength: " + applied);
 				m_expire = Globals.ElapsedTime.Add(duration);
 
 				UpdateManager.Register(UpdateFrequency, UpdateEffect); // don't unregister on grid close, blocks can still be valid
@@ -134,7 +119,6 @@ FinishedBlocks:
 
 		public void Start(Builder_Disruption builder)
 		{
-			this.m_logger = new Logger();
 			this.m_effectOwner = builder.EffectOwner;
 
 			for (int index = 0; index < builder.Affected_Blocks.Length; index++)
@@ -142,7 +126,7 @@ FinishedBlocks:
 				IMyEntity entity;
 				if (!MyAPIGateway.Entities.TryGetEntityById(builder.Affected_Blocks[index], out entity) || !(entity is IMyCubeBlock))
 				{
-					m_logger.debugLog("Block is not in world: " + builder.Affected_Blocks[index], Logger.severity.WARNING);
+					Logger.DebugLog("Block is not in world: " + builder.Affected_Blocks[index], Rynchodon.Logger.severity.WARNING);
 					continue;
 				}
 				IMyCubeBlock block  = (IMyCubeBlock)entity;
@@ -156,7 +140,7 @@ FinishedBlocks:
 
 			if (m_affected.Count != 0)
 			{
-				m_logger.debugLog("Added old effect from builder");
+				Logger.DebugLog("Added old effect from builder");
 				m_expire = builder.Expires.ToTimeSpan();
 				UpdateManager.Register(UpdateFrequency, UpdateEffect);
 				AllDisruptions.Add(this);
@@ -170,7 +154,7 @@ FinishedBlocks:
 		{
 			if (Globals.ElapsedTime > m_expire)
 			{
-				m_logger.debugLog("Removing the effect", Logger.severity.DEBUG);
+				Logger.DebugLog("Removing the effect", Rynchodon.Logger.severity.DEBUG);
 				UpdateManager.Unregister(UpdateFrequency, UpdateEffect);
 				AllDisruptions.Remove(this);
 				RemoveEffect();
@@ -190,7 +174,7 @@ FinishedBlocks:
 				// sound files are not linked properly
 				try { block.SetDamageEffect(false); }
 				catch (NullReferenceException nre)
-				{ m_logger.alwaysLog("Exception on disabling damage effect:\n" + nre, Logger.severity.ERROR); }
+				{ Logger.AlwaysLog("Exception on disabling damage effect:\n" + nre, Rynchodon.Logger.severity.ERROR); }
 
 				MyCubeBlock cubeBlock = block as MyCubeBlock;
 				cubeBlock.ChangeOwner(pair.Value.Owner, pair.Value.ShareMode);

@@ -1,9 +1,8 @@
-﻿using VRage.Game.ModAPI;
+using VRage.Game.ModAPI;
 using VRageMath;
 
 namespace Rynchodon
 {
-	[System.Obsolete("Replaced by Utility.Vectors.Direction")]
 	public class RelativeDirection3F
 	{
 		//One of these will always be set on creation.
@@ -20,13 +19,9 @@ namespace Rynchodon
 		private readonly IMyCubeGrid CubeGrid;
 		private IMyCubeBlock CubeBlock;
 
-		private Logger myLogger;
-
-
 		private RelativeDirection3F(IMyCubeGrid grid)
 		{
 			this.CubeGrid = grid;
-			myLogger = new Logger(() => grid.DisplayName);
 		}
 
 

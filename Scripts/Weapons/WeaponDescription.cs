@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Sandbox.Definitions;
 using Sandbox.ModAPI;
+using Rynchodon.Utility;
 using VRage.Game.ModAPI;
 using VRage.ObjectBuilders;
 
@@ -23,17 +24,6 @@ namespace Rynchodon.Weapons
 			return descr;
 		}
 
-		static WeaponDescription()
-		{
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
-		}
-
-		private static void Entities_OnCloseAll()
-		{
-			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
-			KnownDescriptions = null;
-		}
-
 		private static WeaponDescription CreateFrom(MyCubeBlockDefinition definition)
 		{
 			if (string.IsNullOrWhiteSpace(definition.DescriptionString))
@@ -49,9 +39,9 @@ namespace Rynchodon.Weapons
 			catch (Exception ex)
 			{
 				Logger.DebugNotify("Failed to load description for a weapon", 10000, Logger.severity.ERROR);
-				Logger log = new Logger(() => definition.Id.ToString());
-				log.alwaysLog("Failed to load description for a weapon", Logger.severity.ERROR);
-				log.alwaysLog("Exception: " + ex, Logger.severity.ERROR);
+				Logable Log = new Logable(definition.Id.ToString());
+				Log.AlwaysLog("Failed to load description for a weapon", Logger.severity.ERROR);
+				Log.AlwaysLog("Exception: " + ex, Logger.severity.ERROR);
 				return new WeaponDescription();
 			}
 		}

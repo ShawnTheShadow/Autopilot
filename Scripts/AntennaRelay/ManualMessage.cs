@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Sandbox.Game.Entities.Cube;
-//using Sandbox.Game.Gui;
+using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces.Terminal;
 using VRage.Game.ModAPI;
@@ -16,84 +16,39 @@ namespace Rynchodon.AntennaRelay
 	class ManualMessage
 	{
 
-		public class StaticVariables
+		private class StaticVariables
 		{
-			public Logger logger = new Logger();
+			public MyTerminalControlButton<MyFunctionalBlock>
+				SendMessageButton = new MyTerminalControlButton<MyFunctionalBlock>("ManualMessageId", MyStringId.GetOrCompute("Send Message"),
+					MyStringId.GetOrCompute("Send a message to an Autopilot or Programmable block"), SendMessage) { SupportsMultipleBlocks = false },
 
-            /* var SendMessageButton = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("ManualMessageId");
-             SendMessageButton.Title = MyStringId.GetOrCompute("Send Message");
-             SendMessageButton.Tooltip = MyStringId.GetOrCompute("Send a message to an Autopilot or Programmable block");
-             //public MyTerminalControlButton<MyFunctionalBlock>
-                 //SendMessageButton = new MyTerminalControlButton<MyFunctionalBlock>("ManualMessageId", MyStringId.GetOrCompute("Send Message"),
-                     //MyStringId.GetOrCompute("Send a message to an Autopilot or Programmable block"), SendMessage) { SupportsMultipleBlocks = false },
+				AbortMessageButton = new MyTerminalControlButton<MyFunctionalBlock>("Abort", MyStringId.GetOrCompute("Abort"),
+					MyStringId.GetOrCompute("Return to main terminal screen without sending a message"), Abort) { SupportsMultipleBlocks = false };
 
-                 AbortMessageButton = new MyTerminalControlButton<MyFunctionalBlock>("Abort", MyStringId.GetOrCompute("Abort"),
-                     MyStringId.GetOrCompute("Return to main terminal screen without sending a message"), Abort) { SupportsMultipleBlocks = false };
+			public MyTerminalControlTextbox<MyFunctionalBlock>
+				TargetShipName = new MyTerminalControlTextbox<MyFunctionalBlock>("TargetShipName", MyStringId.GetOrCompute("Ship Name(s)"),
+					MyStringId.GetOrCompute("The name of the ship(s) that will receive the message")) { SupportsMultipleBlocks = false, Getter = GetTargetShipName, Setter = SetTargetShipName },
 
-             public MyTerminalControlTextbox<MyFunctionalBlock>
-                 TargetShipName = new MyTerminalControlTextbox<MyFunctionalBlock>("TargetShipName", MyStringId.GetOrCompute("Ship Name(s)"),
-                     MyStringId.GetOrCompute("The name of the ship(s) that will receive the message")) { SupportsMultipleBlocks = false, Getter = GetTargetShipName, Setter = SetTargetShipName },
+				TargetBlockName = new MyTerminalControlTextbox<MyFunctionalBlock>("TargetBlockName", MyStringId.GetOrCompute("Block Name(s)"),
+					MyStringId.GetOrCompute("The name of the block(s) that will receive the message")) { SupportsMultipleBlocks = false, Getter = GetTargetBlockName, Setter = SetTargetBlockName },
 
-                 TargetBlockName = new MyTerminalControlTextbox<MyFunctionalBlock>("TargetBlockName", MyStringId.GetOrCompute("Block Name(s)"),
-                     MyStringId.GetOrCompute("The name of the block(s) that will receive the message")) { SupportsMultipleBlocks = false, Getter = GetTargetBlockName, Setter = SetTargetBlockName },
-
-                 Message = new MyTerminalControlTextbox<MyFunctionalBlock>("MessageToSend", MyStringId.GetOrCompute("Message"),
-                     MyStringId.GetOrCompute("The message to send")) { SupportsMultipleBlocks = false, Getter = GetMessage, Setter = SetMessage };*/
-            private List<IMyTerminalControl> m_customControls = new List<IMyTerminalControl>();
-            public IMyTerminalControlButton SendMessageButton = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("ManualMessageId");
-            public IMyTerminalControlButton AbortMessageButton = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("Abort");
-            public IMyTerminalControlTextbox TargetShipName = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("TargetShipName");
-            public IMyTerminalControlTextbox TargetBlockName = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("TargetBlockName");
-            public IMyTerminalControlTextbox Message = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("MessageToSend");
-
-
-            public void Initialize()
-            {
-                //SendMessageButton = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("ManualMessageId");
-                SendMessageButton.Title = MyStringId.GetOrCompute("Send Message");
-                SendMessageButton.Tooltip = MyStringId.GetOrCompute("Send a message to an Autopilot or Programmable block");
-                SendMessageButton.SupportsMultipleBlocks = false;
-
-                //AbortMessageButton = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlButton, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("Abort");
-                AbortMessageButton.Title = MyStringId.GetOrCompute("Abort");
-                AbortMessageButton.Tooltip = MyStringId.GetOrCompute("Return to main terminal screen without sending a message");
-                AbortMessageButton.SupportsMultipleBlocks = false;
-
-                //TargetShipName = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("TargetShipName");
-                TargetShipName.Title = MyStringId.GetOrCompute("Ship Name(s)");
-                TargetShipName.Tooltip = MyStringId.GetOrCompute("The name of the ship(s) that will receive the message");
-                TargetShipName.SupportsMultipleBlocks = false;
-                TargetShipName.Getter = GetTargetShipName;
-                TargetShipName.Setter = SetTargetShipName;
-
-                //TargetBlockName = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("TargetBlockName");
-                TargetBlockName.Title = MyStringId.GetOrCompute("Block Name(s)");
-                TargetBlockName.Tooltip = MyStringId.GetOrCompute("The name of the block(s) that will receive the message");
-                TargetBlockName.SupportsMultipleBlocks = false;
-                TargetBlockName.Getter = GetTargetBlockName;
-                TargetBlockName.Setter = SetTargetBlockName;
-
-                //Message = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, SpaceEngineers.Game.ModAPI.Ingame.IMyOxygenFarm>("MessageToSend");
-                Message.Title = MyStringId.GetOrCompute("Message");
-                Message.Tooltip = MyStringId.GetOrCompute("The message to send");
-                Message.SupportsMultipleBlocks = false;
-                Message.Getter = GetMessage;
-                Message.Setter = SetMessage;
-            }
-		}
-		private static StaticVariables Static = new StaticVariables();
-
-		static ManualMessage()
-		{
-            MyAPIGateway.TerminalControls.CustomControlGetter += CustomHandler;
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
-            Static.Initialize();
+				Message = new MyTerminalControlTextbox<MyFunctionalBlock>("MessageToSend", MyStringId.GetOrCompute("Message"),
+					MyStringId.GetOrCompute("The message to send")) { SupportsMultipleBlocks = false, Getter = GetMessage, Setter = SetMessage };
 		}
 
-		private static void Entities_OnCloseAll()
+		private static StaticVariables Static;
+
+		[OnWorldLoad]
+		private static void Initialize()
 		{
-			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
-			MyAPIGateway.TerminalControls.CustomControlGetter -= CustomHandler;
+			MyTerminalControls.Static.CustomControlGetter += CustomHandler;
+			Static = new StaticVariables();
+		}
+
+		[OnWorldClose]
+		private static void Unload()
+		{
+			MyTerminalControls.Static.CustomControlGetter -= CustomHandler;
 			Static = null;
 		}
 
@@ -118,13 +73,13 @@ namespace Rynchodon.AntennaRelay
 			}
 		}
 
-		private static void SendMessage(IMyFunctionalBlock block)
+		private static void SendMessage(MyFunctionalBlock block)
 		{
 			ManualMessage instance;
 			if (!Registrar.TryGetValue(block.EntityId, out instance))
 				throw new ArgumentException("block id not found in registrar");
 
-			block.SwitchTerminalTo();
+			block.RebuildControls();
 
 			if (instance.m_sending)
 			{
@@ -151,19 +106,19 @@ namespace Rynchodon.AntennaRelay
 			}
 		}
 
-		private static void Abort(IMyFunctionalBlock block)
+		private static void Abort(MyFunctionalBlock block)
 		{
 			ManualMessage instance;
 			if (!Registrar.TryGetValue(block.EntityId, out instance))
 				throw new ArgumentException("block id not found in registrar");
 
 			instance.m_sending = false;
-			block.SwitchTerminalTo();
+			block.RebuildControls();
 		}
 
 		#region Getter & Setter
 
-		private static StringBuilder GetTargetShipName(IMyTerminalBlock block)
+		private static StringBuilder GetTargetShipName(MyTerminalBlock block)
 		{
 			ManualMessage instance;
 			if (!Registrar.TryGetValue(block.EntityId, out instance))
@@ -172,7 +127,7 @@ namespace Rynchodon.AntennaRelay
 			return instance.m_targetShipName;
 		}
 
-		private static void SetTargetShipName(IMyTerminalBlock block, StringBuilder value)
+		private static void SetTargetShipName(MyTerminalBlock block, StringBuilder value)
 		{
 			ManualMessage instance;
 			if (!Registrar.TryGetValue(block.EntityId, out instance))
@@ -181,7 +136,7 @@ namespace Rynchodon.AntennaRelay
 			instance.m_targetShipName = value;
 		}
 
-		private static StringBuilder GetTargetBlockName(IMyTerminalBlock block)
+		private static StringBuilder GetTargetBlockName(MyTerminalBlock block)
 		{
 			ManualMessage instance;
 			if (!Registrar.TryGetValue(block.EntityId, out instance))
@@ -190,7 +145,7 @@ namespace Rynchodon.AntennaRelay
 			return instance.m_targetBlockName;
 		}
 
-		private static void SetTargetBlockName(IMyTerminalBlock block, StringBuilder value)
+		private static void SetTargetBlockName(MyTerminalBlock block, StringBuilder value)
 		{
 			ManualMessage instance;
 			if (!Registrar.TryGetValue(block.EntityId, out instance))
@@ -199,7 +154,7 @@ namespace Rynchodon.AntennaRelay
 			instance.m_targetBlockName = value;
 		}
 
-		private static StringBuilder GetMessage(IMyTerminalBlock block)
+		private static StringBuilder GetMessage(MyTerminalBlock block)
 		{
 			ManualMessage instance;
 			if (!Registrar.TryGetValue(block.EntityId, out instance))
@@ -208,7 +163,7 @@ namespace Rynchodon.AntennaRelay
 			return instance.m_message;
 		}
 
-		private static void SetMessage(IMyTerminalBlock block, StringBuilder value)
+		private static void SetMessage(MyTerminalBlock block, StringBuilder value)
 		{
 			ManualMessage instance;
 			if (!Registrar.TryGetValue(block.EntityId, out instance))
@@ -219,7 +174,6 @@ namespace Rynchodon.AntennaRelay
 
 		#endregion Getter & Setter
 
-		private readonly Logger m_logger;
 		private readonly IMyCubeBlock m_block;
 
 		private bool m_sending;
@@ -227,7 +181,6 @@ namespace Rynchodon.AntennaRelay
 
 		public ManualMessage(IMyCubeBlock block)
 		{
-			m_logger = new Logger(block);
 			m_block = block;
 
 			Registrar.Add(block, this);

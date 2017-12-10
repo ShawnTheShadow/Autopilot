@@ -5,8 +5,6 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Gui;
 using VRage.Utils;
 using VRageMath;
-using Sandbox.ModAPI.Interfaces.Terminal;
-using Sandbox.ModAPI;
 
 namespace Rynchodon.Autopilot.Instruction.Command
 {
@@ -42,27 +40,21 @@ namespace Rynchodon.Autopilot.Instruction.Command
 
 		public override void AddControls(List<Sandbox.ModAPI.Interfaces.Terminal.IMyTerminalControl> controls)
 		{
-			IMyTerminalControlTextbox control;
-            control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("GolisCoordX");
-            control.Title = MyStringId.GetOrCompute("X Coordinate");
-            control.Tooltip = MyStringId.NullOrEmpty;
+			MyTerminalControlTextbox<MyShipController> control;
+			control = new MyTerminalControlTextbox<MyShipController>("GolisCoordX", MyStringId.GetOrCompute("Rightward"), MyStringId.GetOrCompute("Rightward from target block"));
 			AddGetSet(control, 0);
 			controls.Add(control);
 
-            control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("GolisCoordY");
-            control.Title = MyStringId.GetOrCompute("Y Coordinate");
-            control.Tooltip = MyStringId.NullOrEmpty;
-            AddGetSet(control, 1);
+			control = new MyTerminalControlTextbox<MyShipController>("GolisCoordY", MyStringId.GetOrCompute("Upward"), MyStringId.GetOrCompute("Upward from target block"));
+			AddGetSet(control, 1);
 			controls.Add(control);
-		
-            control = MyAPIGateway.TerminalControls.CreateControl<IMyTerminalControlTextbox, IMyShipController>("GolisCoordZ");
-            control.Title = MyStringId.GetOrCompute("Z Coordinate");
-            control.Tooltip = MyStringId.NullOrEmpty;
-            AddGetSet(control, 2);
+
+			control = new MyTerminalControlTextbox<MyShipController>("GolisCoordZ", MyStringId.GetOrCompute("Backward"), MyStringId.GetOrCompute("Backward from target block"));
+			AddGetSet(control, 2);
 			controls.Add(control);
 		}
 
-		private void AddGetSet(IMyTerminalControlTextbox control, int index)
+		private void AddGetSet(MyTerminalControlTextbox<MyShipController> control, int index)
 		{
 			control.Getter = block => new StringBuilder(m_offsetValue.GetDim(index).ToString());
 			control.Setter = (block, strBuild) => {
@@ -73,7 +65,7 @@ namespace Rynchodon.Autopilot.Instruction.Command
 			};
 		}
 
-		protected override Action<Movement.Mover> Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
+		protected override AutopilotActionList.AutopilotAction Parse(VRage.Game.ModAPI.IMyCubeBlock autopilot, string command, out string message)
 		{
 			if (!GetVector(command, out m_offsetValue))
 			{

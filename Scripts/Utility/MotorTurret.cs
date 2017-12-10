@@ -1,13 +1,18 @@
-﻿using System;
+#if DEBUG
+//#define TRACE
+#endif
+
+using System;
 using System.Collections.Generic;
-using Rynchodon.Attached;
+using Rynchodon.Utility;
 using Rynchodon.Utility.Vectors;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.ModAPI;
-using Sandbox.ModAPI.Interfaces;
 using VRage.Game.ModAPI;
 using VRage.ObjectBuilders;
 using VRageMath;
+using System.Diagnostics;
+using Sandbox.Game.Entities.Cube;
 
 namespace Rynchodon
 {
@@ -20,58 +25,275 @@ namespace Rynchodon
 	/// </remarks>
 	public class MotorTurret : IDisposable
 	{
-		private class StaticVariables
-		{
-			public readonly MyObjectBuilderType[] types_Rotor = new MyObjectBuilderType[] { typeof(MyObjectBuilder_MotorRotor), typeof(MyObjectBuilder_MotorAdvancedRotor), typeof(MyObjectBuilder_MotorStator), typeof(MyObjectBuilder_MotorAdvancedStator) };
-			public readonly HashSet<IMyMotorStator> claimedStators = new HashSet<IMyMotorStator>();
-			public ITerminalProperty<float> statorVelocity;
-		}
-
-		private static StaticVariables Static = new StaticVariables();
 		public delegate void StatorChangeHandler(IMyMotorStator statorEl, IMyMotorStator statorAz);
-		private const float def_RotationSpeedMultiplier = 100;
+		private const float speedLimit = MathHelper.Pi;
 
-		static MotorTurret()
+		private static readonly MyObjectBuilderType[] types_Rotor = new MyObjectBuilderType[] { typeof(MyObjectBuilder_MotorRotor), typeof(MyObjectBuilder_MotorAdvancedRotor) };
+
+		#region Stator Claiming
+
+		private static readonly Dictionary<IMyMotorStator, List<MotorTurret>> claimedStator = new Dictionary<IMyMotorStator, List<MotorTurret>>();
+
+		private static int GetMiddle(List<MotorTurret> users)
 		{
-			MyAPIGateway.Entities.OnCloseAll += Entities_OnCloseAll;
+			Vector3D middle = new Vector3D();
+			int count = 0;
+			for (int index = users.Count - 1; index >= 0; --index)
+			{
+				middle += users[index].FaceBlock.GetPosition();
+				++count;
+			}
+			middle /= count;
+
+			double closeSq = double.PositiveInfinity;
+			int closest = 0;
+			for (int index = users.Count - 1; index >= 0; --index)
+			{
+				double distSq = Vector3D.DistanceSquared(users[index].FaceBlock.GetPosition(), middle);
+				Logger.DebugLog("user: " + users[index].FaceBlock.nameWithId() + ", distSq: " + distSq + ", closestSq: " + closeSq);
+				if (distSq < closeSq)
+				{
+					closeSq = distSq;
+					closest = index;
+				}
+			}
+
+			return closest;
 		}
 
-		private static void Entities_OnCloseAll()
+		private static void UpdateClaim(IMyMotorStator stator)
 		{
-			MyAPIGateway.Entities.OnCloseAll -= Entities_OnCloseAll;
-			Static = null;
-		}
+			List<MotorTurret> users = claimedStator[stator];
 
-		private static void GetElevationAndAzimuth(Vector3 vector, out float elevation, out float azimuth)
-		{
-			elevation = (float)Math.Asin(vector.Y);
-
-			// azimuth is arbitrary when elevation is +/- 1
-			if (Math.Abs(vector.Y) > 0.9999f)
-				azimuth = float.NaN;
+			MotorTurret currentClaimant = users[0];
+			if (currentClaimant.StatorEl == stator)
+			{
+				if (!currentClaimant.m_claimedElevation)
+					currentClaimant = null;
+			}
+			else if (currentClaimant.StatorAz == stator)
+			{
+				if (!currentClaimant.m_claimedAzimuth)
+					currentClaimant = null;
+			}
 			else
-				azimuth = (float)Math.Atan2(vector.X, vector.Z);
+				throw new Exception(currentClaimant.FaceBlock.nameWithId() + " does not have " + stator.nameWithId());
+
+			int middle = GetMiddle(users);
+			MotorTurret middleClaimant = users[middle];
+			if (currentClaimant == middleClaimant)
+			{
+				Logger.DebugLog("Claim for " + stator.nameWithId() + " is up-to-date. Claimed by " + currentClaimant.FaceBlock.nameWithId());
+				return;
+			}
+
+			Logger.DebugLog("claim of " + stator.nameWithId() + " changed from " + currentClaimant?.FaceBlock.nameWithId() + " to " + middleClaimant.FaceBlock.nameWithId());
+			if (middle != 0)
+				users.Swap(0, middle);
+
+			if (currentClaimant != null)
+				SetClaim(stator, currentClaimant, false);
+
+			SetClaim(stator, middleClaimant, true);
 		}
+
+		private static void SetClaim(IMyMotorStator stator, MotorTurret turret, bool claimed)
+		{
+			Logger.DebugLog(nameof(stator) + ": " + stator.nameWithId() + ", " + nameof(turret) + ": " + turret.FaceBlock.nameWithId() + ", " + nameof(claimed) + ": " + claimed);
+			if (turret.StatorEl == stator)
+				turret.m_claimedElevation = claimed;
+			else if (turret.StatorAz == stator)
+				turret.m_claimedAzimuth = claimed;
+			else
+				throw new Exception(turret.FaceBlock.nameWithId() + " does not have " + stator.nameWithId());
+		}
+
+		private static void RegisterClaim(IMyMotorStator stator, MotorTurret turret)
+		{
+			lock (claimedStator)
+			{
+				List<MotorTurret> users;
+				if (claimedStator.TryGetValue(stator, out users))
+				{
+					Debug.Assert(!users.Contains(turret), turret.FaceBlock.nameWithId() + " is already in users list");
+					Logger.DebugLog("registered claim: " + stator.nameWithId() + "/" + turret.FaceBlock.nameWithId());
+					users.Add(turret);
+					UpdateClaim(stator);
+				}
+				else
+				{
+					Logger.DebugLog("first claim: " + stator.nameWithId() + "/" + turret.FaceBlock.nameWithId());
+					users = new List<MotorTurret>();
+					claimedStator.Add(stator, users);
+					users.Add(turret);
+					SetClaim(stator, turret, true);
+				}
+			}
+		}
+
+		private static void RescindClaim(IMyMotorStator stator, MotorTurret turret)
+		{
+			lock (claimedStator)
+			{
+				List<MotorTurret> users;
+				if (claimedStator.TryGetValue(stator, out users))
+				{
+					int index = users.IndexOf(turret);
+					if (index < 0)
+					{
+						Logger.DebugLog("Cannot remove claim on " + stator.nameWithId() + " by " + turret.FaceBlock.nameWithId() + ", not in users list");
+						return;
+					}
+					SetClaim(stator, turret, false);
+					if (users.Count == 1)
+					{
+						Logger.DebugLog("removing only claim: " + stator.nameWithId() + "/" + turret.FaceBlock.nameWithId());
+						claimedStator.Remove(stator);
+						return;
+					}
+					users.RemoveAtFast(index);
+					UpdateClaim(stator);
+				}
+				else
+				{
+					Logger.DebugLog("Cannot remove claim on " + stator.nameWithId() + " by " + turret.FaceBlock.nameWithId() + ", no users list");
+					return;
+				}
+			}
+		}
+
+		#endregion
+
+		#region Static Calc Face
 
 		/// <summary>
 		/// Determines if a stator can rotate a specific amount.
 		/// </summary>
 		/// <returns>True iff the stator can rotate the specified amount.</returns>
-		private static bool CanRotate(IMyMotorStator stator, float amount)
+		private static bool WithinLimits(IMyMotorStator stator, float delta)
 		{
-			// NaN is treated as zero
-			if (float.IsNaN(amount) || stator.UpperLimit - stator.LowerLimit > MathHelper.TwoPi)
+			if (stator.UpperLimitDeg - stator.LowerLimitDeg >= MathHelper.TwoPi)
 				return true;
 
-			return amount > 0f ? amount <= stator.UpperLimit - stator.Angle : amount >= stator.LowerLimit - stator.Angle;
+			float target = stator.Angle + delta;
+			return delta > 0f ? target <= stator.UpperLimitDeg : target >= stator.LowerLimitDeg;
+		}
+
+		/// <summary>
+		/// Clamp an angle change by the angle limits of a stator.
+		/// </summary>
+		private static float ClampToLimits(IMyMotorStator stator, float delta)
+		{
+			if (stator.UpperLimitDeg - stator.LowerLimitDeg >= MathHelper.TwoPi)
+				return delta;
+
+			return delta > 0f ? Math.Min(delta, stator.UpperLimitDeg - stator.Angle) : Math.Max(delta, stator.LowerLimitDeg - stator.Angle);
+		}
+
+		/// <summary>
+		/// Given two deltas that are not within angle limits, find the delta angle that gets closest to either delta.
+		/// </summary>
+		/// <param name="accuracy">How close delta is to either of the original deltas.</param>
+		private static void BestEffort(IMyMotorStator stator, float firstDelta, float secondDelta, out float delta, out float accuracy)
+		{
+			float clampFirstAzDelta = ClampToLimits(stator, firstDelta);
+			float clampSecondAzDelta = ClampToLimits(stator, secondDelta);
+
+			float firstAccuracy = Math.Abs(firstDelta - clampFirstAzDelta);
+			float secondAccuracy = Math.Abs(secondDelta - clampSecondAzDelta);
+
+			if (firstAccuracy <= secondAccuracy)
+			{
+				delta = clampFirstAzDelta;
+				accuracy = firstAccuracy;
+			}
+			else
+			{
+				delta = clampSecondAzDelta;
+				accuracy = secondAccuracy;
+			}
+		}
+
+		/// <summary>
+		/// Calculate the angular difference in X/Z plane from one vector to another.
+		/// </summary>
+		/// <param name="current">The vector that represents the current position.</param>
+		/// <param name="target">The vector that represents the target position.</param>
+		/// <param name="delta1">The change in angle from current to target, rotating the shorter distance.</param>
+		/// <param name="delta2">The change in angle from current to target, rotating the longer distance.</param>
+		private static void CalcDelta(Vector3 current, Vector3 target, out float delta1, out float delta2)
+		{
+			Logger.TraceLog(nameof(current) + " is " + current);
+			Logger.TraceLog(nameof(target) + " is " + target);
+
+			current.Y = 0f;
+			float temp = current.Normalize();
+			if (temp == 0f || !temp.IsValid())
+			{
+				delta1 = delta2 = temp;
+				return;
+			}
+			target.Y = 0f;
+			temp = target.Normalize();
+			if (temp == 0f || !temp.IsValid())
+			{
+				delta1 = delta2 = temp;
+				return;
+			}
+
+			//Debug.Assert(current.Y == 0f, nameof(current) + " does not have Y == 0");
+			//Debug.Assert(target.Y == 0f, nameof(target) + " does not have Y == 0");
+			//current.AssertNormalized(nameof(current));
+			//target.AssertNormalized(nameof(target));
+
+			Logger.TraceLog("normalized " + nameof(current) + " is " + current);
+			Logger.TraceLog("normalized " + nameof(target) + " is " + target);
+
+			float dot; Vector3.Dot(ref current, ref target, out dot);
+			if (dot > 0.99999f)
+			{
+				Logger.TraceLog("Already facing desired direction");
+				// already facing the desired direction
+				delta1 = delta2 = 0f;
+				return;
+			}
+
+			float angle = (float)Math.Acos(dot);
+			angle.AssertIsValid();
+
+			if (target.Z * current.X - target.X * current.Z > 0f) // Y component of cross product > 0
+			{
+				delta1 = angle;
+				delta2 = angle - MathHelper.TwoPi;
+			}
+			else
+			{
+				delta1 = -angle;
+				delta2 = MathHelper.TwoPi - angle;
+			}
+
+			Logger.TraceLog(nameof(delta1) + " is " + delta1);
+			Logger.TraceLog(nameof(delta2) + " is " + delta2);
+			return;
+		}
+
+		#endregion
+
+		private static bool StatorOk(IMyMotorStator stator)
+		{
+			return stator != null && !stator.Closed && stator.IsAttached;
 		}
 
 		private readonly IMyCubeBlock FaceBlock;
-		private readonly Logger myLogger;
 		private readonly StatorChangeHandler OnStatorChange;
-
-		private float my_RotationSpeedMulitplier = def_RotationSpeedMultiplier;
-		private float mySpeedLimit = 30f;
+		/// <summary>Conversion between angle delta and speed.</summary>
+		private readonly float m_rotationSpeedMulitplier;
+		/// <summary>The maximum difference between the direction the turret is facing and the target where rotation is considered to be useful.</summary>
+		/// <remarks>
+		/// For solar facing, float.PositiveInfinity is used, indicating that the turret should make a best effort.
+		/// For weapons, a lower value is used because the turret must point accurately enough that the weapon can hit the target.
+		/// </remarks>
+		private readonly float m_requiredAccuracyRadians;
 
 		private bool m_claimedElevation, m_claimedAzimuth;
 		private IMyMotorStator value_statorEl, value_statorAz;
@@ -84,14 +306,8 @@ namespace Rynchodon
 			{
 				if (value_statorEl == value)
 					return;
-				if (m_claimedElevation)
-				{
-					m_claimedElevation = false;
-					if (Static.claimedStators.Remove(value_statorEl))
-						myLogger.debugLog("Released claim on elevation stator: " + value_statorEl.nameWithId(), Logger.severity.DEBUG);
-					else
-						myLogger.alwaysLog("Failed to remove claim on elevation stator: " + value_statorEl.nameWithId(), Logger.severity.ERROR);
-				}
+				if (value_statorEl != null)
+					RescindClaim(value_statorEl, this);
 				value_statorEl = value;
 			}
 		}
@@ -104,24 +320,26 @@ namespace Rynchodon
 			{
 				if (value_statorAz == value)
 					return;
-				if (m_claimedAzimuth)
-				{
-					m_claimedAzimuth = false;
-					if (Static.claimedStators.Remove(value_statorAz))
-						myLogger.debugLog("Released claim on azimuth stator: " + value_statorAz.nameWithId(), Logger.severity.DEBUG);
-					else
-						myLogger.alwaysLog("Failed to remove claim on azimuth stator: " + value_statorAz.nameWithId(), Logger.severity.ERROR);
-				}
+				if (value_statorAz != null)
+					RescindClaim(value_statorAz, this);
 				value_statorAz = value;
 			}
 		}
 
-		public MotorTurret(IMyCubeBlock block, StatorChangeHandler handler = null)
+		private Logable Log { get { return new Logable(FaceBlock); } }
+
+		public MotorTurret(IMyCubeBlock block, StatorChangeHandler handler = null, int updateFrequency = 100, float requiredAccuracyRadians = float.PositiveInfinity)
 		{
 			this.FaceBlock = block;
-			this.myLogger = new Logger(block);
 			this.OnStatorChange = handler;
-			this.SetupStators();
+
+			m_rotationSpeedMulitplier = 30f / Math.Max(updateFrequency, 6);
+			m_requiredAccuracyRadians = requiredAccuracyRadians;
+
+			FaceBlock.OnClose += (x) => Dispose();
+			FaceBlock.IsWorkingChanged += FaceBlock_IsWorkingChanged;
+			if (FaceBlock.IsWorking)
+				FaceBlock_IsWorkingChanged(FaceBlock);
 		}
 
 		~MotorTurret()
@@ -131,7 +349,8 @@ namespace Rynchodon
 
 		public void Dispose()
 		{
-			if (Static != null)
+			GC.SuppressFinalize(this);
+			if (!Globals.WorldClosed)
 			{
 				Stop();
 				StatorEl = null;
@@ -139,126 +358,418 @@ namespace Rynchodon
 			}
 		}
 
-		public float RotationSpeedMultiplier
+		private void FaceBlock_IsWorkingChanged(IMyCubeBlock obj)
 		{
-			get { return my_RotationSpeedMulitplier; }
-			set { my_RotationSpeedMulitplier = Math.Abs(value); }
+			if (obj.IsWorking)
+			{
+				SetupStators();
+				ClaimStators();
+			}
+			else
+			{
+				Stop();
+				StatorEl = null;
+				StatorAz = null;
+			}
 		}
 
-		public float SpeedLimit
-		{
-			get { return mySpeedLimit; }
-			set { mySpeedLimit = Math.Abs(value); }
-		}
+		#region Calc Face
 
 		/// <summary>
-		/// Try to face in the target direction.
+		/// Try to face in the target direction. Must execute on game thread.
 		/// </summary>
 		public void FaceTowards(DirectionWorld target)
 		{
-			myLogger.debugLog("Not server!", Logger.severity.FATAL, condition: !MyAPIGateway.Multiplayer.IsServer);
+			Log.DebugLog("Not server!", Logger.severity.FATAL, condition: !MyAPIGateway.Multiplayer.IsServer);
+			Debug.Assert(Threading.ThreadTracker.IsGameThread, "not game thread");
 
-			if (!SetupStators())
+			if (!m_claimedElevation && !m_claimedAzimuth)
+				// nothing to do
 				return;
 
-			float bestDeltaElevation;
-			float bestDeltaAzimuth;
-			CalcFaceTowards(target, out bestDeltaElevation, out bestDeltaAzimuth);
+			FaceResult bestResult;
+			if (!CalcFaceTowards(target, out bestResult))
+			{
+				Stop();
+				return;
+			}
+
+			Log.TraceLog("Face: " + target + ", elevation: " + bestResult.DeltaElevation + ", azimuth: " + bestResult.DeltaAzimuth);
 
 			if (m_claimedElevation)
-				SetVelocity(StatorEl, bestDeltaElevation);
+				SetVelocity(StatorEl, bestResult.DeltaElevation);
 			if (m_claimedAzimuth)
-				SetVelocity(StatorAz, bestDeltaAzimuth);
+				SetVelocity(StatorAz, bestResult.DeltaAzimuth);
 		}
 
-		public bool CanFaceTowards(DirectionWorld target, float CanRotateMulti = 1f)
+		/// <summary>
+		/// Determine if the motor turret can face the target direction. Thread-safe.
+		/// </summary>
+		/// <param name="target">The direction to face.</param>
+		/// <returns>True iff the turret can face the target direction.</returns>
+		public bool CanFaceTowards(DirectionWorld target)
 		{
-			if (!StatorOK())
+			if (!StatorOk(StatorEl))
 				return false;
 
-			float bestDeltaElevation;
-			float bestDeltaAzimuth;
-			return CalcFaceTowards(target, out bestDeltaElevation, out bestDeltaAzimuth, CanRotateMulti);
+			FaceResult bestResult;
+			return CalcFaceTowards(target, out bestResult);
 		}
 
-		private bool CalcFaceTowards(DirectionWorld target, out float bestDeltaElevation, out float bestDeltaAzimuth, float CanRotateMulti = 1f)
+		private struct FaceResult
 		{
-			DirectionBlock blockTarget = target.ToBlock((IMyCubeBlock)StatorAz);
-			float targetElevation, targetAzimuth;
-			GetElevationAndAzimuth(blockTarget.vector, out targetElevation, out targetAzimuth);
-			PositionBlock faceBlockPosition = new PositionWorld() { vector = FaceBlock.GetPosition() }.ToBlock((IMyCubeBlock)StatorAz);
-			bool alternate = blockTarget.vector.Z * faceBlockPosition.vector.X - blockTarget.vector.X * faceBlockPosition.vector.Z > 0f; // Y component of cross product > 0
-
-			bestDeltaElevation = 0f;
-			bestDeltaAzimuth = 0f;
-
-			bool first = true;
-			bool canFace = false;
-			foreach (Base6Directions.Direction direction in FaceBlock.FaceDirections(target))
+			public static readonly FaceResult Default = new FaceResult()
 			{
-				DirectionBlock blockCurrent = new DirectionWorld() { vector = FaceBlock.WorldMatrix.GetDirectionVector(direction) }.ToBlock((IMyCubeBlock)StatorAz);
+				AccuracySquared = float.PositiveInfinity,
+				SumDeltaMag = float.PositiveInfinity,
+				DeltaElevation = float.NaN,
+				DeltaAzimuth = float.NaN
+			};
 
-				float currentElevation, currentAzimuth;
-				GetElevationAndAzimuth(blockCurrent.vector, out currentElevation, out currentAzimuth);
+			public float AccuracySquared;
+			public float SumDeltaMag;
+			public float DeltaElevation;
+			public float DeltaAzimuth;
 
-				// essentially we have done a pseudo calculation of target/current elevation/azimuth but they are either correct or "opposite" of the actual values
-				// we can determine which with a simple calculation
+			public bool ReplaceBy(float accSq, float sumDelta)
+			{
+				const float accuracyMulti = 100f;
 
-				float deltaElevation, deltaAzimuth;
-				CalcFaceTowards(currentElevation, currentAzimuth, targetElevation, targetAzimuth, out deltaElevation, out deltaAzimuth, alternate);
-				canFace = CanRotate(StatorEl, deltaElevation * CanRotateMulti) && CanRotate(StatorAz, deltaAzimuth * CanRotateMulti);
+				float myScore = accuracyMulti * AccuracySquared + SumDeltaMag * SumDeltaMag;
+				float otherScore = accuracyMulti * accSq + sumDelta * sumDelta;
 
-				if (first)
-				{
-					first = false;
-					bestDeltaElevation = deltaElevation;
-					bestDeltaAzimuth = deltaAzimuth;
-					if (canFace)
-						break;
-				}
-				else if (canFace)
-				{
-					bestDeltaElevation = deltaElevation;
-					bestDeltaAzimuth = deltaAzimuth;
-					break;
-				}
-
-				CalcFaceTowards(currentElevation, currentAzimuth, targetElevation, targetAzimuth, out deltaElevation, out deltaAzimuth, !alternate, false);
-				canFace = CanRotate(StatorEl, deltaElevation * CanRotateMulti) && CanRotate(StatorAz, deltaAzimuth * CanRotateMulti);
-
-				if (canFace)
-				{
-					bestDeltaElevation = deltaElevation;
-					bestDeltaAzimuth = deltaAzimuth;
-					break;
-				}
+				return otherScore < myScore;
 			}
 
-			return canFace;
+			public override string ToString()
+			{
+				return nameof(AccuracySquared) + ": " + AccuracySquared + ", " + 
+					nameof(SumDeltaMag) + ": " + SumDeltaMag + ", " + 
+					nameof(DeltaElevation) + ": " + DeltaElevation + ", " + 
+					nameof(DeltaAzimuth) + ": " + DeltaAzimuth;
+			}
 		}
 
-		private void CalcFaceTowards(float currentElevation, float currentAzimuth, float targetElevation, float targetAzimuth, out float deltaElevation, out float deltaAzimuth, bool alternate = false, bool allowFlip = true)
+		private bool CalcFaceTowards(DirectionWorld targetWorldSpace, out FaceResult bestResult)
 		{
-			if (alternate)
-			{
-				targetElevation = MathHelper.Pi - targetElevation;
-				targetAzimuth += MathHelper.Pi;
-			}
-			deltaAzimuth = MathHelper.WrapAngle(currentAzimuth - targetAzimuth);
-			if (allowFlip && Math.Abs(deltaAzimuth) > MathHelper.PiOver2)
-			{
-				currentElevation = MathHelper.Pi - currentElevation;
-				deltaAzimuth = MathHelper.WrapAngle(deltaAzimuth + MathHelper.Pi);
-			}
-			deltaElevation = MathHelper.WrapAngle(currentElevation - targetElevation);
+			if (StatorOk(StatorAz))
+				return CalcFaceTowards_AzimuthOk(targetWorldSpace, out bestResult);
+			else
+				return CalcFaceTowards_NoAzimuth(targetWorldSpace, out bestResult);
 		}
 
+		private bool CalcFaceTowards_AzimuthOk(DirectionWorld targetWorldSpace, out FaceResult bestResult)
+		{
+			bestResult = FaceResult.Default;
+			Vector3 target = targetWorldSpace.ToBlock(StatorAz);
+
+			foreach (var direction in FaceBlock.FaceDirections())
+			{
+				DirectionWorld faceDirection = new DirectionWorld() { vector = FaceBlock.WorldMatrix.GetDirectionVector(direction) };
+				Vector3 current = faceDirection.ToBlock(StatorAz);
+
+				float firstDelta, secondDelta;
+				CalcDelta(current, target, out firstDelta, out secondDelta);
+				if (m_claimedAzimuth)
+				{
+					// azimuth has been claimed, check limits
+					if (CalcFaceTowards_Claimed(ref bestResult, targetWorldSpace, faceDirection, firstDelta))
+						Log.TraceLog("First azimuth delta is reachable: " + firstDelta);
+					else if (CalcFaceTowards_Claimed(ref bestResult, targetWorldSpace, faceDirection, secondDelta))
+						Log.TraceLog("Second azimuth delta is reachable: " + secondDelta);
+
+					if (bestResult.AccuracySquared > 0.1f)
+					{
+						// try flipped
+						float clamped = ClampToLimits(StatorAz, firstDelta);
+						if (clamped > 0f)
+						{
+							firstDelta = clamped - MathHelper.Pi;
+							secondDelta = clamped + MathHelper.Pi;
+						}
+						else
+						{
+							firstDelta = clamped + MathHelper.Pi;
+							secondDelta = clamped - MathHelper.Pi;
+						}
+
+						if (CalcFaceTowards_Claimed(ref bestResult, targetWorldSpace, faceDirection, firstDelta))
+							Log.TraceLog("First flipped azimuth delta is reachable: " + firstDelta);
+						else if (CalcFaceTowards_Claimed(ref bestResult, targetWorldSpace, faceDirection, secondDelta))
+							Log.TraceLog("Second flipped azimuth delta is reachable: " + secondDelta);
+					}
+				}
+				else if (CalcFaceTowards_NotClaimed(ref bestResult, targetWorldSpace, faceDirection, firstDelta)) // azimuth has not been claimed, check that current azimuth is close enough
+					Log.TraceLog("Azimuth is within tolerance: " + firstDelta);
+				else
+					Log.TraceLog("Azimuth is outside tolerance: " + firstDelta);
+			}
+
+			if (bestResult.AccuracySquared != float.PositiveInfinity)
+			{
+				Log.TraceLog("Best: " + bestResult);
+				return true;
+			}
+
+			Log.TraceLog("Cannot rotate to target");
+			return false;
+		}
+
+		private bool CalcFaceTowards_NoAzimuth(DirectionWorld targetWorldSpace, out FaceResult bestResult)
+		{
+			bestResult = FaceResult.Default;
+
+			foreach (var direction in FaceBlock.FaceDirections())
+			{
+				DirectionWorld faceDirection = new DirectionWorld() { vector = FaceBlock.WorldMatrix.GetDirectionVector(direction) };
+				CalcFaceTowards_NotClaimed(ref bestResult, targetWorldSpace, faceDirection, MathHelper.TwoPi);
+			}
+
+			if (bestResult.AccuracySquared != float.PositiveInfinity)
+			{
+				Log.TraceLog("Best: " + bestResult);
+				return true;
+			}
+
+			Log.TraceLog("Cannot rotate to target");
+			return false;
+		}
+
+		private bool CalcFaceTowards_Claimed(ref FaceResult bestResult, DirectionWorld target, DirectionWorld faceDirection, float azimuthDelta)
+		{
+			float azimuthAccuracy;
+			if (WithinLimits(StatorAz, azimuthDelta))
+				azimuthAccuracy = 0f;
+			else
+			{
+				float clamped = ClampToLimits(StatorAz, azimuthDelta);
+				azimuthAccuracy = Math.Abs(azimuthDelta - clamped);
+				if (azimuthAccuracy > m_requiredAccuracyRadians)
+					return false;
+				azimuthDelta = clamped;
+			}
+
+			float elevationDelta, elevationAccuracy;
+			if (CalcElevation(target, faceDirection, azimuthDelta, out elevationDelta, out elevationAccuracy))
+			{
+				float accSq = azimuthAccuracy * azimuthAccuracy + elevationAccuracy * elevationAccuracy;
+				float sumDeltaMag = Math.Abs(azimuthDelta) + Math.Abs(elevationDelta);
+				Log.TraceLog("Best: " + bestResult + ", current: " + new FaceResult() { AccuracySquared = accSq, SumDeltaMag = sumDeltaMag, DeltaElevation = elevationDelta, DeltaAzimuth = azimuthDelta });
+				if (bestResult.ReplaceBy(accSq, sumDeltaMag))
+				{
+					bestResult.AccuracySquared = accSq;
+					bestResult.SumDeltaMag = sumDeltaMag;
+					bestResult.DeltaAzimuth = azimuthDelta;
+					bestResult.DeltaElevation = elevationDelta;
+				}
+				return true;
+			}
+			return false;
+		}
+
+		private bool CalcFaceTowards_NotClaimed(ref FaceResult bestResult, DirectionWorld target, DirectionWorld faceDirection, float azimuthDelta)
+		{
+			if (Math.Abs(azimuthDelta) > m_requiredAccuracyRadians)
+				return false;
+
+			float elevationDelta, elevationAccuracy;
+			if (CalcElevation(target, faceDirection, azimuthDelta, out elevationDelta, out elevationAccuracy))
+			{
+				float accSq = azimuthDelta * azimuthDelta + elevationAccuracy * elevationAccuracy;
+				if (accSq > m_requiredAccuracyRadians * m_requiredAccuracyRadians)
+					return false;
+				float sumDeltaMag = Math.Abs(elevationDelta);
+				Log.TraceLog("Best: " + bestResult + ", current: " + new FaceResult() { AccuracySquared = accSq, SumDeltaMag = sumDeltaMag, DeltaElevation = elevationDelta, DeltaAzimuth = 0f });
+				if (bestResult.ReplaceBy(accSq, sumDeltaMag))
+				{
+					bestResult.AccuracySquared = accSq;
+					bestResult.SumDeltaMag = sumDeltaMag;
+					bestResult.DeltaAzimuth = 0f;
+					bestResult.DeltaElevation = elevationDelta;
+				}
+				return true;
+			}
+			return false;
+		}
+
+		private bool CalcElevation(DirectionWorld targetWorldSpace, DirectionWorld faceDirection, float azimuthDelta, out float elevationDelta, out float elevationAccuracy)
+		{
+			if (StatorOk(StatorAz) && m_claimedAzimuth)
+				ApplyAzimuthChange(ref faceDirection, azimuthDelta);
+			Vector3 current = faceDirection.ToBlock(StatorEl);
+			Vector3 target = targetWorldSpace.ToBlock(StatorEl);
+
+			Log.TraceLog(nameof(targetWorldSpace) + ": " + targetWorldSpace + ", " + nameof(faceDirection) + ": " + faceDirection + ", " + nameof(target) + ": " + target + ", " + nameof(current) + ": " + current);
+
+			float firstDelta, secondDelta;
+			CalcDelta(current, target, out firstDelta, out secondDelta);
+
+			if (m_claimedElevation)
+			{
+				// elevation has been claimed, check limits
+				if (WithinLimits(StatorEl, firstDelta))
+				{
+					Log.TraceLog("First elevation delta is reachable: " + firstDelta);
+					elevationDelta = firstDelta;
+					elevationAccuracy = 0f;
+					return true;
+				}
+				if (WithinLimits(StatorEl, secondDelta))
+				{
+					Log.TraceLog("Second elevation delta is reachable: " + secondDelta);
+					elevationDelta = secondDelta;
+					elevationAccuracy = 0f;
+					return true;
+				}
+				BestEffort(StatorEl, firstDelta, secondDelta, out elevationDelta, out elevationAccuracy);
+				if (elevationAccuracy < m_requiredAccuracyRadians)
+				{
+					Log.TraceLog("Best effort: " + elevationDelta);
+					return true;
+				}
+			}
+			else
+			{
+				// elevation not claimed, check that the current elevation is close enough
+				elevationAccuracy = Math.Abs(firstDelta);
+				if (elevationAccuracy < m_requiredAccuracyRadians)
+				{
+					Log.TraceLog("Elevation within tolerance: " + firstDelta);
+					elevationDelta = 0f; // not claimed, no rotation
+					return true;
+				}
+			}
+
+			Log.TraceLog("Neither elevation delta acceptable");
+			elevationDelta = float.NaN;
+			elevationAccuracy = float.PositiveInfinity;
+			return false;
+		}
+
+		/// <summary>
+		/// Rotate current direction by azimuth stator's delta.
+		/// </summary>
+		/// <param name="facing">The current direction.</param>
+		/// <param name="azDelta">The change in angle of azimuth stator.</param>
+		private void ApplyAzimuthChange(ref DirectionWorld facing, float azDelta)
+		{
+			Log.TraceLog(nameof(facing) + " is " + facing);
+			Vector3 axis = StatorAz.WorldMatrix.Down;
+			Log.TraceLog(nameof(axis) + " is " + axis);
+			Log.TraceLog(nameof(azDelta) + " is " + azDelta);
+			Quaternion rotation; Quaternion.CreateFromAxisAngle(ref axis, azDelta, out rotation);
+			Vector3.Transform(ref facing.vector, ref rotation, out facing.vector);
+			Log.TraceLog(nameof(facing) + " is " + facing);
+		}
+
+		#endregion
+
+		#region Setup
+
+		/// <summary>
+		/// One-time setup for stators.
+		/// </summary>
+		private void SetupStators()
+		{
+			// get StatorEl from FaceBlock's grid
+			IMyMotorStator tempStator;
+			if (!GetStatorRotor(FaceBlock.CubeGrid, out tempStator))
+			{
+				Log.DebugLog("Failed to get StatorEl");
+				StatorEl = null;
+				OnStatorChange?.Invoke(StatorEl, StatorAz);
+				return;
+			}
+			StatorEl = tempStator;
+
+			if (!GetStatorRotor(StatorEl.CubeGrid, out tempStator, StatorEl))
+			{
+				Log.DebugLog("Failed to get StatorAz");
+				StatorAz = null;
+				OnStatorChange?.Invoke(StatorEl, StatorAz);
+				return;
+			}
+			StatorAz = tempStator;
+
+			Log.DebugLog("Successfully got stators. Elevation = " + StatorEl.nameWithId() + ", Azimuth = " + StatorAz.nameWithId());
+			OnStatorChange?.Invoke(StatorEl, StatorAz);
+			Stop();
+			return;
+		}
+
+		/// <summary>
+		/// One-time registration of stator claims.
+		/// </summary>
+		private void ClaimStators()
+		{
+			if (StatorOk(StatorEl))
+				RegisterClaim(StatorEl, this);
+			else if (StatorEl != null)
+				StatorEl = null;
+
+			if (StatorOk(StatorAz))
+				RegisterClaim(StatorAz, this);
+			else if (StatorAz != null)
+				StatorAz = null;
+		}
+
+		private static bool ArePerpendicular(IMyMotorStator statorOne, IMyMotorStator statorTwo)
+		{
+			Logger.TraceLog(nameof(statorOne) + ": " + statorOne.nameWithId() + ", Up: " + statorOne.WorldMatrix.Up + ", " + nameof(statorTwo) + ": " + statorTwo.nameWithId() + ", Up: " + statorTwo.WorldMatrix.Up + ", dot: " + statorOne.WorldMatrix.Up.Dot(statorTwo.WorldMatrix.Up));
+			return Math.Abs(statorOne.WorldMatrix.Up.Dot(statorTwo.WorldMatrix.Up)) < 0.1f;
+		}
+
+		private bool GetStatorRotor(IMyCubeGrid grid, out IMyMotorStator Stator, IMyMotorStator IgnoreStator = null)
+		{
+			CubeGridCache cache = CubeGridCache.GetFor(grid);
+
+			// first stator that are found that are not working
+			// returned if a working set is not found
+			IMyMotorStator offStator = null;
+
+			foreach (MyObjectBuilderType type in types_Rotor)
+				foreach (IMyMotorRotor rotor in cache.BlocksOfType(type))
+				{
+					if (!FaceBlock.canControlBlock(rotor))
+					{
+						Log.DebugLog("Cannot control: " + rotor.nameWithId());
+						continue;
+					}
+
+					Stator = (IMyMotorStator)rotor.Base;
+					if (Stator == null || Stator == IgnoreStator)
+						continue;
+
+					if (IgnoreStator != null && !ArePerpendicular(IgnoreStator, Stator))
+					{
+						Log.DebugLog("Not perpendicular: " + IgnoreStator.nameWithId() + " & " + Stator.nameWithId());
+						continue;
+					}
+
+					if (Stator.IsWorking)
+						return true;
+					else if (offStator == null)
+						offStator = Stator;
+				}
+
+			if (offStator != null)
+			{
+				Stator = offStator;
+				return true;
+			}
+
+			Stator = null;
+			return false;
+		}
+
+		#endregion
+
+		/// <summary>
+		/// Must execute on game thread.
+		/// </summary>
 		public void Stop()
 		{
-			myLogger.debugLog("Not server!", Logger.severity.FATAL, condition: !MyAPIGateway.Multiplayer.IsServer);
-
-			if (!StatorOK())
-				return;
+			Log.DebugLog("Not server!", Logger.severity.FATAL, condition: !MyAPIGateway.Multiplayer.IsServer);
 
 			if (m_claimedElevation)
 				SetVelocity(StatorEl, 0);
@@ -266,121 +777,32 @@ namespace Rynchodon
 				SetVelocity(StatorAz, 0);
 		}
 
-		private bool StatorOK()
-		{ return StatorEl != null && !StatorEl.Closed && StatorEl.IsAttached && StatorAz != null && !StatorAz.Closed && StatorAz.IsAttached; }
-
-		private bool ClaimStators()
+		private void SetVelocity(IMyMotorStator stator, float angle)
 		{
-			if (!m_claimedElevation)
-			{
-				m_claimedElevation = Static.claimedStators.Add(StatorEl);
-				myLogger.debugLog("claimed elevation stator: " + StatorEl.nameWithId(), Logger.severity.DEBUG, condition: m_claimedElevation);
-			}
-			if (!m_claimedAzimuth)
-			{
-				m_claimedAzimuth = Static.claimedStators.Add(StatorAz);
-				myLogger.debugLog("claimed azimuth stator: " + StatorAz.nameWithId(), Logger.severity.DEBUG, condition: m_claimedAzimuth);
-			}
-			return m_claimedElevation || m_claimedAzimuth;
+			SetVelocity((MyMotorStator)stator, angle);
 		}
 
-		private bool SetupStators()
+		/// <exception cref="ArithmeticException">If angle is not a number.</exception>
+		private void SetVelocity(MyMotorStator stator, float angle)
 		{
-			if (StatorOK())
+			Log.DebugLog("Not server!", Logger.severity.FATAL, condition: !MyAPIGateway.Multiplayer.IsServer);
+
+			if (!StatorOk(stator))
+				return;
+
+			if (!stator.Enabled)
+				stator.Enabled = true;
+
+			float velocity = MathHelper.Clamp(angle * m_rotationSpeedMulitplier, -speedLimit, speedLimit);
+
+			float currentVelocity = stator.TargetVelocity;
+			if (Math.Sign(velocity) != Math.Sign(currentVelocity) || Math.Abs(velocity - currentVelocity) > 0.01f)
 			{
-				//myLogger.debugLog("Stators are already set up", "SetupStators()");
-				return ClaimStators();
+				Log.TraceLog("Stator: " + stator.nameWithId() + ", Setting velocity. " + nameof(currentVelocity) + ": " + currentVelocity + ", target: " + velocity + ", angle: " + angle);
+				stator.TargetVelocity.Value = velocity;
 			}
-
-			// get StatorEl from FaceBlock's grid
-			IMyMotorStator tempStator;
-			IMyCubeBlock RotorEl;
-			if (!GetStatorRotor(FaceBlock.CubeGrid, out tempStator, out RotorEl))
-			{
-				myLogger.debugLog("Failed to get StatorEl");
-				StatorEl = null;
-				if (OnStatorChange != null)
-					OnStatorChange(StatorEl, StatorAz);
-				return false;
-			}
-			StatorEl = tempStator;
-
-			// get StatorAz from grid from either StatorEl or RotorEl, whichever is not on Faceblock's grid
-			IMyCubeGrid getBFrom;
-			if (RotorEl.CubeGrid == FaceBlock.CubeGrid)
-				getBFrom = StatorEl.CubeGrid as IMyCubeGrid;
-			else
-				getBFrom = RotorEl.CubeGrid;
-
-			IMyCubeBlock RotorAz;
-			if (!GetStatorRotor(getBFrom, out tempStator, out RotorAz, StatorEl, RotorEl))
-			{
-				myLogger.debugLog("Failed to get StatorAz");
-				StatorAz = null;
-				if (OnStatorChange != null)
-					OnStatorChange(StatorEl, StatorAz);
-				return false;
-			}
-			StatorAz = tempStator;
-
-			myLogger.debugLog("Successfully got stators. Elevation = " + StatorEl.DisplayNameText + ", Azimuth = " + StatorAz.DisplayNameText);
-			if (OnStatorChange != null)
-				OnStatorChange(StatorEl, StatorAz);
-			Stop();
-			return ClaimStators();
-		}
-
-		private bool GetStatorRotor(IMyCubeGrid grid, out IMyMotorStator Stator, out IMyCubeBlock Rotor, IMyMotorStator IgnoreStator = null, IMyCubeBlock IgnoreRotor = null)
-		{
-			CubeGridCache cache = CubeGridCache.GetFor(grid);
-
-			foreach (MyObjectBuilderType type in Static.types_Rotor)
-			{
-				var blocksOfType = cache.GetBlocksOfType(type);
-				if (blocksOfType == null || blocksOfType.Count == 0)
-					continue;
-
-				foreach (IMyCubeBlock motorPart in blocksOfType)
-				{
-					if (!FaceBlock.canControlBlock(motorPart))
-						continue;
-
-					Stator = motorPart as IMyMotorStator;
-					if (Stator != null)
-					{
-						if (Stator == IgnoreStator)
-							continue;
-						if (StatorRotor.TryGetRotor(Stator, out Rotor) && FaceBlock.canControlBlock(Stator as IMyCubeBlock))
-							return true;
-					}
-					else
-					{
-						Rotor = motorPart;
-						if (Rotor == IgnoreRotor)
-							continue;
-						if (StatorRotor.TryGetStator(Rotor, out Stator) && FaceBlock.canControlBlock(Stator as IMyCubeBlock))
-							return true;
-					}
-				}
-			}
-
-			Stator = null;
-			Rotor = null;
-			return false;
-		}
-
-		private void SetVelocity(IMyMotorStator Stator, float angle)
-		{
-			myLogger.debugLog("Not server!", Logger.severity.FATAL, condition: !MyAPIGateway.Multiplayer.IsServer);
-
-			// keep in mind, azimuth is undefined if elevation is straight up or straight down
-			float speed = angle.IsValid() ? MathHelper.Clamp(angle * RotationSpeedMultiplier, -mySpeedLimit, mySpeedLimit) : 0f;
-
-			if (Static.statorVelocity == null)
-				Static.statorVelocity = Stator.GetProperty("Velocity") as ITerminalProperty<float>;
-			float currentSpeed = Static.statorVelocity.GetValue(Stator);
-			if ((speed == 0f && currentSpeed != 0f) || Math.Abs(speed - currentSpeed) > 0.1f)
-				Static.statorVelocity.SetValue(Stator, speed);
+			//else
+			//	Log.TraceLog("Not changing velocity. " + nameof(currentVelocity) + ": " + currentVelocity + ", target: " + velocity + ", angle: " + angle);
 		}
 	}
 }

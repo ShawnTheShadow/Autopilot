@@ -1,19 +1,23 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.IO;
+using System.Reflection;
 using Rynchodon.AntennaRelay;
 using Rynchodon.Attached;
 using Rynchodon.Autopilot;
+using Rynchodon.Autopilot.Aerodynamics;
 using Rynchodon.Autopilot.Harvest;
 using Rynchodon.Settings;
 using Rynchodon.Threading;
 using Rynchodon.Utility;
+using Rynchodon.Utility.Collections;
 using Rynchodon.Weapons;
 using Rynchodon.Weapons.Guided;
 using Rynchodon.Weapons.SystemDisruption;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
 using Sandbox.ModAPI;
+using VRage.FileSystem;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
@@ -54,13 +58,13 @@ namespace Rynchodon.Update
 		{
 			#region Autopilot
 
-			RadarEquipment.Definition apRadar = new RadarEquipment.Definition()
-			{
-				Radar = true,
-				LineOfSight = false,
-				MaxTargets_Tracking = 3,
-				MaxPowerLevel = 1000
-			};
+			//RadarEquipment.Definition apRadar = new RadarEquipment.Definition()
+			//{
+			//	Radar = true,
+			//	LineOfSight = false,
+			//	MaxTargets_Tracking = 3,
+			//	MaxPowerLevel = 1000
+			//};
 
 			Action<IMyCubeBlock> construct = block => {
 				if (ShipAutopilot.IsAutopilotBlock(block))
@@ -68,8 +72,8 @@ namespace Rynchodon.Update
 					var sca = new ShipAutopilot(block);
 					RegisterForUpdates(ShipAutopilot.UpdateFrequency, sca.Update, block);
 					RegisterForUpdates(100, sca.m_block.NetworkNode.Update100, block);
-					RadarEquipment r = new RadarEquipment(block, apRadar, block);
-					RegisterForUpdates(100, r.Update100, block);
+					//RadarEquipment r = new RadarEquipment(block, apRadar, block);
+					//RegisterForUpdates(100, r.Update100, block);
 				}
 			};
 
@@ -90,7 +94,7 @@ namespace Rynchodon.Update
 					}
 				});
 			else
-				myLogger.debugLog("Hacker is disabled in settings");
+				Log.DebugLog("Hacker is disabled in settings");
 
 			#endregion
 
@@ -115,9 +119,6 @@ namespace Rynchodon.Update
 				var od = new OreDetector(block);
 				RegisterForUpdates(1000, od.Update, block);
 			});
-
-			if (ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bImmortalMiner))
-				new DamageHandler();
 		}
 
 		/// <summary>
@@ -127,27 +128,12 @@ namespace Rynchodon.Update
 		{
 			#region Attached
 
-			RegisterForBlock(typeof(MyObjectBuilder_MotorStator), (block) => {
-				StatorRotor.Stator stator = new StatorRotor.Stator(block);
-				RegisterForUpdates(1, stator.Update10, block);
-			});
-			RegisterForBlock(typeof(MyObjectBuilder_MotorAdvancedStator), (block) => {
-				StatorRotor.Stator stator = new StatorRotor.Stator(block);
-				RegisterForUpdates(1, stator.Update10, block);
-			});
-			RegisterForBlock(typeof(MyObjectBuilder_MotorRotor), (block) => {
-				new StatorRotor.Rotor(block);
-			});
-			RegisterForBlock(typeof(MyObjectBuilder_MotorAdvancedRotor), (block) => {
-				new StatorRotor.Rotor(block);
-			});
+			RegisterForBlock(new MyObjectBuilderType[] { typeof(MyObjectBuilder_MotorStator), typeof(MyObjectBuilder_MotorAdvancedStator), typeof(MyObjectBuilder_MotorSuspension) }, 
+				block => RegisterForUpdates(100, (new StatorRotor.Stator(block)).Update, block));
 
 			RegisterForBlock(typeof(MyObjectBuilder_ExtendedPistonBase), (block) => {
 				Piston.PistonBase pistonBase = new Piston.PistonBase(block);
 				RegisterForUpdates(100, pistonBase.Update, block);
-			});
-			RegisterForBlock(typeof(MyObjectBuilder_PistonTop), (block) => {
-				new Piston.PistonTop(block);
 			});
 
 			RegisterForBlock(typeof(MyObjectBuilder_ShipConnector), (block) => {
@@ -179,7 +165,6 @@ namespace Rynchodon.Update
 					RelayNode node = new RelayNode(character);
 					RegisterForUpdates(100, node.Update100, (IMyEntity)character);
 				}
-				new CharacterStateTracker(character);
 			});
 
 			RegisterForBlock(typeof(MyObjectBuilder_MyProgrammableBlock), block => {
@@ -212,21 +197,21 @@ namespace Rynchodon.Update
 
 			if (!MyAPIGateway.Multiplayer.IsServer)
 			{
-				RadarEquipment.Definition apRadar = new RadarEquipment.Definition()
-				{
-					Radar = true,
-					LineOfSight = false,
-					MaxTargets_Tracking = 3,
-					MaxPowerLevel = 1000
-				};
+				//RadarEquipment.Definition apRadar = new RadarEquipment.Definition()
+				//{
+				//	Radar = true,
+				//	LineOfSight = false,
+				//	MaxTargets_Tracking = 3,
+				//	MaxPowerLevel = 1000
+				//};
 
 				Action<IMyCubeBlock> apConstruct = (block) => {
 					if (ShipAutopilot.IsAutopilotBlock(block))
 					{
 						nodeConstruct(block);
 						new AutopilotTerminal(block);
-						RadarEquipment r = new RadarEquipment(block, apRadar, block);
-						RegisterForUpdates(100, r.Update100, block);
+						//RadarEquipment r = new RadarEquipment(block, apRadar, block);
+						//RegisterForUpdates(100, r.Update100, block);
 					}
 				};
 
@@ -235,34 +220,32 @@ namespace Rynchodon.Update
 				RegisterForBlock(typeof(MyObjectBuilder_Cockpit), apConstruct);
 			}
 
+			if (ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bAirResistanceBeta))
+			{
+				RegisterForGrid(grid => {
+					AeroEffects aero = new AeroEffects(grid);
+					RegisterForUpdates(1, aero.Update1, grid);
+					if (MyAPIGateway.Multiplayer.IsServer)
+						RegisterForUpdates(100, aero.Update100, grid);
+				});
+				RegisterForBlock(typeof(MyObjectBuilder_Cockpit), block => RegisterForUpdates(1, (new CockpitTerminal(block)).Update1, block));
+			}
+
 			#endregion
 
 			#region Radar
-			// must come after nodes are created
 
 			if (ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bAllowRadar))
 			{
 				RegisterForBlock(typeof(MyObjectBuilder_Beacon), (block) => {
-					if (RadarEquipment.IsRadarOrJammer(block))
-					{
-						RadarEquipment r = new RadarEquipment(block);
-						RegisterForUpdates(100, r.Update100, block);
-					}
+					if (RadarEquipment.IsDefinedRadarEquipment(block))
+						new RadarEquipment(block);
 				});
 				RegisterForBlock(typeof(MyObjectBuilder_RadioAntenna), (block) => {
-					if (RadarEquipment.IsRadarOrJammer(block))
-					{
-						RadarEquipment r = new RadarEquipment(block);
-						RegisterForUpdates(100, r.Update100, block);
-					}
+					if (RadarEquipment.IsDefinedRadarEquipment(block))
+						new RadarEquipment(block);
 				});
-				//RegisterForEveryBlock((IMyCubeBlock block) => {
-				//	if (RadarEquipment.IsRadarOrJammer(block))
-				//	{
-				//		RadarEquipment r = new RadarEquipment(block);
-				//		RegisterForUpdates(100, r.Update100, block);
-				//	}
-				//});
+				RegisterForUpdates(100, RadarEquipment.UpdateAll);
 			}
 
 			#endregion
@@ -342,7 +325,7 @@ namespace Rynchodon.Update
 				RegisterForUpdates(100, GuidedMissile.Update100);
 			}
 			else
-				myLogger.debugLog("Weapon Control is disabled", Logger.severity.INFO);
+				Log.DebugLog("Weapon Control is disabled", Logger.severity.INFO);
 
 			#endregion
 
@@ -357,59 +340,97 @@ namespace Rynchodon.Update
 			#endregion
 
 			new ChatHandler();
+			Globals.Update100();
+			RegisterForUpdates(100, Globals.Update100);
+
+			Action<IMyCubeBlock> act = (block) => MainCockpitFix.AddController((IMyShipController)block);
+			RegisterForBlock(typeof(MyObjectBuilder_Cockpit), act);
+			RegisterForBlock(typeof(MyObjectBuilder_RemoteControl), act);
 		}
 
 		private static UpdateManager Instance;
 
+		static UpdateManager()
+		{
+			string oldPath = Path.Combine(MyFileSystem.UserDataPath, "Storage", "363880940.sbm_Autopilot");
+			if (Directory.Exists(oldPath))
+			{
+				string newPath = Path.Combine(MyFileSystem.UserDataPath, "Storage", "ARMS");
+				if (Directory.Exists(newPath))
+				{
+					Logger.AlwaysLog("ARMS folder exists, data must be manually merged", Logger.severity.WARNING);
+					return;
+				}
+				Directory.Move(oldPath, newPath);
+				string AutopilotSettings = Path.Combine(newPath, "AutopilotSettings.txt");
+				if (File.Exists(AutopilotSettings))
+				{
+					string ServerSettings = Path.Combine(newPath, "ServerSettings.txt");
+					if (File.Exists(ServerSettings))
+					{
+						Logger.AlwaysLog("AutopilotSettings.txt and ServerSettings.txt both exist", Logger.severity.WARNING);
+						return;
+					}
+					File.Move(AutopilotSettings, ServerSettings);
+				}
+				else
+					Logger.AlwaysLog("No file at " + AutopilotSettings, Logger.severity.WARNING);
+			}
+			else
+				Logger.DebugLog("No directory at " + oldPath);
+		}
+
 		/// <param name="unregisterOnClosing">Leave as null if you plan on using Unregister at all.</param>
 		public static void Register(uint frequency, Action toInvoke, IMyEntity unregisterOnClosing = null)
 		{
-			Instance.ExternalRegistrations.Enqueue(() => {
+			if (Globals.WorldClosed)
+				return;
+			Instance.ExternalRegistrations.AddTail(() => {
 				Instance.RegisterForUpdates(frequency, toInvoke, unregisterOnClosing);
 			});
 		}
 
 		public static void Unregister(uint frequency, Action toInvoke)
 		{
-			Instance.ExternalRegistrations.Enqueue(() => {
+			if (Globals.WorldClosed)
+				return;
+			Instance.ExternalRegistrations.AddTail(() => {
 				Instance.UnRegisterForUpdates(frequency, toInvoke);
 			});
 		}
 
-		private Dictionary<uint, List<Action>> UpdateRegistrar;
+		private Dictionary<uint, List<Action>> UpdateRegistrar = new Dictionary<uint, List<Action>>();
 
-		private Dictionary<MyObjectBuilderType, List<Action<IMyCubeBlock>>> AllBlockScriptConstructors;
+		private Dictionary<MyObjectBuilderType, List<Action<IMyCubeBlock>>> AllBlockScriptConstructors = new Dictionary<MyObjectBuilderType, List<Action<IMyCubeBlock>>>();
 		/// <summary>For scripts that use a separate condition to determine if they run for a block.</summary>
-		private List<Action<IMyCubeBlock>> EveryBlockScriptConstructors;
+		private List<Action<IMyCubeBlock>> EveryBlockScriptConstructors = new List<Action<IMyCubeBlock>>();
 		/// <summary>For scripts that run on IMyCharacter entities.</summary>
-		private List<Action<IMyCharacter>> CharacterScriptConstructors;
-		private List<Action<IMyCubeGrid>> GridScriptConstructors;
+		private List<Action<IMyCharacter>> CharacterScriptConstructors = new List<Action<IMyCharacter>>();
+		private List<Action<IMyCubeGrid>> GridScriptConstructors = new List<Action<IMyCubeGrid>>();
 
 		private enum Status : byte { Not_Initialized, Initialized, Started, Terminated }
 		private Status ManagerStatus = Status.Not_Initialized;
 
-		private LockedQueue<Action> AddRemoveActions;
-		private LockedQueue<Action> ExternalRegistrations;
-		private List<IMyPlayer> playersAPI;
-		private List<IMyPlayer> playersCached;
+		private LockedDeque<Action> AddRemoveActions = new LockedDeque<Action>();
+		private LockedDeque<Action> ExternalRegistrations = new LockedDeque<Action>();
 
 		private HashSet<long> CubeBlocks = new HashSet<long>();
 		private HashSet<long> Characters = new HashSet<long>();
 
-		private readonly Logger myLogger;
-
 		private DateTime m_lastUpdate;
+
+		private Logable Log { get { return new Logable("", ManagerStatus.ToString()); } }
 
 		public UpdateManager()
 		{
-			myLogger = new Logger(() => string.Empty, () => { return ManagerStatus.ToString(); });
 			ThreadTracker.SetGameThread();
 			Instance = this;
+			MainLock.MainThread_AcquireExclusive();
 		}
 
 		public void Init()
 		{
-			//myLogger.debugLog("entered Init", "Init()");
+			//Log.DebugLog("entered Init", "Init()");
 			try
 			{
 				if (MyAPIGateway.CubeBuilder == null || MyAPIGateway.Entities == null || MyAPIGateway.Multiplayer == null || MyAPIGateway.Parallel == null
@@ -419,53 +440,50 @@ namespace Rynchodon.Update
 				if (!MyAPIGateway.Multiplayer.IsServer && MyAPIGateway.Session.Player == null)
 					return;
 
-				myLogger.debugLog("World: " + MyAPIGateway.Session.Name + ", Path: " + MyAPIGateway.Session.CurrentPath, Logger.severity.INFO);
-
-				Saver.Instance.Initialize();
-
-				UpdateRegistrar = new Dictionary<uint, List<Action>>();
-				AllBlockScriptConstructors = new Dictionary<MyObjectBuilderType, List<Action<IMyCubeBlock>>>();
-				EveryBlockScriptConstructors = new List<Action<IMyCubeBlock>>();
-				CharacterScriptConstructors = new List<Action<IMyCharacter>>();
-				GridScriptConstructors = new List<Action<IMyCubeGrid>>();
-
-				playersAPI = new List<IMyPlayer>();
-				playersCached = new List<IMyPlayer>();
-
-				AddRemoveActions = new LockedQueue<Action>(8);
-				ExternalRegistrations = new LockedQueue<Action>(1);
+				Globals.WorldClosed = false;
+				Log.DebugLog("World: " + MyAPIGateway.Session.Name + ", Path: " + MyAPIGateway.Session.CurrentPath, Logger.severity.INFO);
+				AttributeFinder.InvokeMethodsWithAttribute<OnWorldLoad>();
+				MyAPIGateway.Entities.OnCloseAll += UnloadData;
 
 				if (!MyAPIGateway.Multiplayer.MultiplayerActive)
 				{
-					myLogger.alwaysLog("Single player, running server scripts", Logger.severity.INFO);
+					Log.AlwaysLog("Single player, running server scripts", Logger.severity.INFO);
 					RegisterScripts_Server();
 				}
 				else if (MyAPIGateway.Multiplayer.IsServer)
 				{
-					myLogger.alwaysLog("This is the server, running server scripts", Logger.severity.INFO);
+					Log.AlwaysLog("This is the server, running server scripts", Logger.severity.INFO);
 					RegisterScripts_Server();
 				}
 				else
 				{
-					myLogger.alwaysLog("Client, running client scripts only", Logger.severity.INFO);
+					Log.AlwaysLog("Client, running client scripts only", Logger.severity.INFO);
 				}
 
-				if (!MyFinalBuildConstants.IS_STABLE)
-					myLogger.alwaysLog("Space Engineers build is UNSTABLE");
-				if (!MyFinalBuildConstants.IS_OFFICIAL)
-					myLogger.alwaysLog("Space Engineers build is UNOFFICIAL");
-				if (MyFinalBuildConstants.IS_DEBUG)
-					myLogger.alwaysLog("Space Engineers build is DEBUG");
+				if (!CheckFinalBuildConstant("IS_OFFICIAL"))
+					Log.AlwaysLog("Space Engineers build is UNOFFICIAL; this build is not supported. Version: " + MyFinalBuildConstants.APP_VERSION_STRING, Logger.severity.WARNING);
+				else if (CheckFinalBuildConstant("IS_DEBUG"))
+					Log.AlwaysLog("Space Engineers build is DEBUG; this build is not supported. Version: " + MyFinalBuildConstants.APP_VERSION_STRING, Logger.severity.WARNING);
+				else
+					Log.AlwaysLog("Space Engineers version: " + MyFinalBuildConstants.APP_VERSION_STRING, Logger.severity.INFO);
 
-				Logger.DebugNotify("ARMS dev version loaded", 10000);
+				Logger.DebugNotify("ARMS DEBUG build loaded", 10000, Logger.severity.INFO);
 
 				ManagerStatus = Status.Initialized;
 			}
 			catch (Exception ex)
 			{
-				myLogger.alwaysLog("Failed to Init(): " + ex, Logger.severity.FATAL);
+				Log.AlwaysLog("Failed to Init(): " + ex, Logger.severity.FATAL);
 				ManagerStatus = Status.Terminated;
 			}
+		}
+
+		private bool CheckFinalBuildConstant(string fieldName)
+		{
+			FieldInfo field = typeof(MyFinalBuildConstants).GetField(fieldName);
+			if (field == null)
+				throw new NullReferenceException("MyFinalBuildConstants does not have a field named " + fieldName + " or it has unexpected binding");
+			return (bool)field.GetValue(null);
 		}
 
 		private void Start()
@@ -476,7 +494,7 @@ namespace Rynchodon.Update
 			HashSet<IMyEntity> allEntities = new HashSet<IMyEntity>();
 			MyAPIGateway.Entities.GetEntities(allEntities);
 
-			//myLogger.debugLog("Adding all entities", "Init()");
+			//Log.DebugLog("Adding all entities", "Init()");
 			foreach (IMyEntity entity in allEntities)
 				AddEntity(entity);
 
@@ -485,13 +503,13 @@ namespace Rynchodon.Update
 
 			if (!ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bAllowAutopilot))
 			{
-				myLogger.alwaysLog("Disabling autopilot blocks", Logger.severity.INFO);
+				Log.AlwaysLog("Disabling autopilot blocks", Logger.severity.INFO);
 				MyDefinitionManager.Static.GetCubeBlockDefinition(new SerializableDefinitionId(typeof(MyObjectBuilder_Cockpit), "Autopilot-Block_Large")).Enabled = false;
 				MyDefinitionManager.Static.GetCubeBlockDefinition(new SerializableDefinitionId(typeof(MyObjectBuilder_Cockpit), "Autopilot-Block_Small")).Enabled = false;
 			}
 			if (!ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bAllowGuidedMissile))
 			{
-				myLogger.alwaysLog("Disabling guided missile blocks", Logger.severity.INFO);
+				Log.AlwaysLog("Disabling guided missile blocks", Logger.severity.INFO);
 				MyDefinitionManager.Static.GetCubeBlockDefinition(new SerializableDefinitionId(typeof(MyObjectBuilder_SmallMissileLauncher), "Souper_R12VP_Launcher")).Enabled = false;
 				MyDefinitionManager.Static.GetCubeBlockDefinition(new SerializableDefinitionId(typeof(MyObjectBuilder_SmallMissileLauncher), "Souper_R8EA_Launcher")).Enabled = false;
 				MyDefinitionManager.Static.GetCubeBlockDefinition(new SerializableDefinitionId(typeof(MyObjectBuilder_SmallMissileLauncher), "Souper_B3MP_Launcher")).Enabled = false;
@@ -499,13 +517,13 @@ namespace Rynchodon.Update
 			}
 			if (!ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bAllowHacker))
 			{
-				myLogger.alwaysLog("Disabling hacker blocks", Logger.severity.INFO);
+				Log.AlwaysLog("Disabling hacker blocks", Logger.severity.INFO);
 				MyDefinitionManager.Static.GetCubeBlockDefinition(new SerializableDefinitionId(typeof(MyObjectBuilder_LandingGear), "ARMS_SmallHackerBlock")).Enabled = false;
 				MyDefinitionManager.Static.GetCubeBlockDefinition(new SerializableDefinitionId(typeof(MyObjectBuilder_LandingGear), "ARMS_LargeHackerBlock")).Enabled = false;
 			}
 			if (!ServerSettings.GetSetting<bool>(ServerSettings.SettingName.bAllowRadar))
 			{
-				myLogger.alwaysLog("Disabling radar blocks", Logger.severity.INFO);
+				Log.AlwaysLog("Disabling radar blocks", Logger.severity.INFO);
 				MyDefinitionManager.Static.GetCubeBlockDefinition(new SerializableDefinitionId(typeof(MyObjectBuilder_Beacon), "LargeBlockRadarRynAR")).Enabled = false;
 				MyDefinitionManager.Static.GetCubeBlockDefinition(new SerializableDefinitionId(typeof(MyObjectBuilder_Beacon), "SmallBlockRadarRynAR")).Enabled = false;
 				MyDefinitionManager.Static.GetCubeBlockDefinition(new SerializableDefinitionId(typeof(MyObjectBuilder_Beacon), "Radar_A_Large_Souper07")).Enabled = false;
@@ -520,8 +538,7 @@ namespace Rynchodon.Update
 				MyDefinitionManager.Static.GetCubeBlockDefinition(new SerializableDefinitionId(typeof(MyObjectBuilder_RadioAntenna), "AP_Radar_Jammer_Small")).Enabled = false;
 			}
 
-			Message.Init();
-			Saver.Instance.DoLoad();
+			AttributeFinder.InvokeMethodsWithAttribute<AfterArmsInit>();
 		}
 
 		/// <summary>
@@ -535,14 +552,13 @@ namespace Rynchodon.Update
 				switch (ManagerStatus)
 				{
 					case Status.Not_Initialized:
-						//myLogger.debugLog("Not Initialized", "UpdateAfterSimulation()");
 						Init();
 						return;
 
 					case Status.Initialized:
 						if (ServerSettings.ServerSettingsLoaded)
 						{
-							myLogger.debugLog("Server settings loaded");
+							Log.DebugLog("Server settings loaded");
 							Start();
 						}
 						return;
@@ -554,15 +570,15 @@ namespace Rynchodon.Update
 
 				if (AddRemoveActions.Count != 0)
 					try
-					{ AddRemoveActions.DequeueAll(action => action.Invoke()); }
+					{ AddRemoveActions.PopHeadInvokeAll();	}
 					catch (Exception ex)
-					{ myLogger.alwaysLog("Exception in AddRemoveActions: " + ex, Logger.severity.ERROR); }
+					{ Log.AlwaysLog("Exception in AddRemoveActions: " + ex, Logger.severity.ERROR); }
 
 				if (ExternalRegistrations.Count != 0)
 					try
-					{ ExternalRegistrations.DequeueAll(action => action.Invoke()); }
+					{ ExternalRegistrations.PopHeadInvokeAll(); }
 					catch (Exception ex)
-					{ myLogger.alwaysLog("Exception in ExternalRegistrations: " + ex, Logger.severity.ERROR); }
+					{ Log.AlwaysLog("Exception in ExternalRegistrations: " + ex, Logger.severity.ERROR); }
 
 				foreach (KeyValuePair<uint, List<Action>> pair in UpdateRegistrar)
 					if (Globals.UpdateCount % pair.Key == 0)
@@ -570,8 +586,9 @@ namespace Rynchodon.Update
 						foreach (Action item in pair.Value)
 							try
 							{
-								//item.Invoke();
-								Profiler.Profile(item);
+								Profiler.StartProfileBlock(item);
+								item.Invoke();
+								Profiler.EndProfileBlock();
 							}
 							catch (Exception ex2)
 							{
@@ -579,7 +596,7 @@ namespace Rynchodon.Update
 									Unregister = new Dictionary<Action, uint>();
 								if (!Unregister.ContainsKey(item))
 								{
-									myLogger.alwaysLog("Script threw exception, unregistering: " + ex2, Logger.severity.ERROR);
+									Log.AlwaysLog("Script threw exception, unregistering: " + ex2, Logger.severity.ERROR);
 									Logger.DebugNotify("A script has been terminated", 10000, Logger.severity.ERROR);
 									Unregister.Add(item, pair.Key);
 								}
@@ -592,7 +609,7 @@ namespace Rynchodon.Update
 			}
 			catch (Exception ex)
 			{
-				myLogger.alwaysLog("Exception: " + ex, Logger.severity.FATAL);
+				Log.AlwaysLog("Exception: " + ex, Logger.severity.FATAL);
 				ManagerStatus = Status.Terminated;
 			}
 			finally
@@ -602,7 +619,7 @@ namespace Rynchodon.Update
 				float instantSimSpeed = Globals.UpdateDuration / (float)(DateTime.UtcNow - m_lastUpdate).TotalSeconds;
 				if (instantSimSpeed > 0.01f && instantSimSpeed < 1.1f)
 					Globals.SimSpeed = Globals.SimSpeed * 0.9f + instantSimSpeed * 0.1f;
-				//myLogger.debugLog("instantSimSpeed: " + instantSimSpeed + ", SimSpeed: " + Globals.SimSpeed);
+				//Log.DebugLog("instantSimSpeed: " + instantSimSpeed + ", SimSpeed: " + Globals.SimSpeed);
 				m_lastUpdate = DateTime.UtcNow;
 
 				MainLock.MainThread_AcquireExclusive();
@@ -633,13 +650,13 @@ namespace Rynchodon.Update
 			if (UpdateRegistrar == null)
 				return;
 
-			//myLogger.debugLog("entered UnRegisterForUpdates()");
+			//Log.DebugLog("entered UnRegisterForUpdates()");
 			List<Action> UpdateL = UpdateList(frequency);
 			UpdateL.Remove(toInvoke);
 
 			if (UpdateL.Count == 0)
 				UpdateRegistrar.Remove(frequency);
-			//myLogger.debugLog("leaving UnRegisterForUpdates()");
+			//Log.DebugLog("leaving UnRegisterForUpdates()");
 		}
 
 		/// <summary>
@@ -658,7 +675,7 @@ namespace Rynchodon.Update
 		/// <param name="constructor">construcor wrapped in an Action</param>
 		private void RegisterForBlock(MyObjectBuilderType objBuildType, Action<IMyCubeBlock> constructor)
 		{
-			//myLogger.debugLog("Registered for block: " + objBuildType, "RegisterForBlock()", Logger.severity.DEBUG);
+			//Log.DebugLog("Registered for block: " + objBuildType, "RegisterForBlock()", Logger.severity.DEBUG);
 			BlockScriptConstructor(objBuildType).Add(constructor);
 		}
 
@@ -674,7 +691,7 @@ namespace Rynchodon.Update
 		/// <param name="constructor">constructor wrapped in an Action</param>
 		private void RegisterForCharacter(Action<IMyCharacter> constructor)
 		{
-			//myLogger.debugLog("Registered for character", "RegisterForCharacter()", Logger.severity.DEBUG);
+			//Log.DebugLog("Registered for character", "RegisterForCharacter()", Logger.severity.DEBUG);
 			CharacterScriptConstructors.Add(constructor);
 		}
 
@@ -684,7 +701,7 @@ namespace Rynchodon.Update
 		/// <param name="constructor">constructor wrapped in an Action</param>
 		private void RegisterForGrid(Action<IMyCubeGrid> constructor)
 		{
-			//myLogger.debugLog("Registered for grid", "RegisterForGrid()", Logger.severity.DEBUG);
+			//Log.DebugLog("Registered for grid", "RegisterForGrid()", Logger.severity.DEBUG);
 			GridScriptConstructors.Add(constructor);
 		}
 
@@ -694,7 +711,7 @@ namespace Rynchodon.Update
 		private void Entities_OnEntityAdd(IMyEntity entity)
 		{
 			if (entity.Save || entity is IMyCharacter)
-				AddRemoveActions.Enqueue(() => AddEntity(entity));
+				AddRemoveActions.AddTail(() => AddEntity(entity));
 		}
 
 		/// <summary>
@@ -707,15 +724,9 @@ namespace Rynchodon.Update
 			if (!(entity.Save || entity is IMyCharacter))
 				return;
 
-			//myLogger.debugLog("adding entity: " + entity.getBestName() + ", flags: " + entity.Flags + ", persistent: " + entity.PersistentFlags, "AddEntity()");
-
 			IMyCubeGrid asGrid = entity as IMyCubeGrid;
 			if (asGrid != null)
 			{
-				//myLogger.debugLog("adding grid: " + asGrid.DisplayName + ", flags: " + asGrid.Flags + ", persistent: " + asGrid.PersistentFlags, "AddEntity()");
-
-				//myLogger.debugLog("save: " + asGrid.Save, "AddEntity()");
-
 				List<IMySlimBlock> blocksInGrid = new List<IMySlimBlock>();
 				asGrid.GetBlocks(blocksInGrid, slim => slim.FatBlock != null);
 				foreach (IMySlimBlock slim in blocksInGrid)
@@ -727,7 +738,7 @@ namespace Rynchodon.Update
 					try { constructor.Invoke(asGrid); }
 					catch (Exception ex)
 					{
-						myLogger.alwaysLog("Exception in grid constructor: " + ex, Logger.severity.ERROR);
+						Log.AlwaysLog("Exception in grid constructor: " + ex, Logger.severity.ERROR);
 						Logger.DebugNotify("Exception in grid constructor", 10000, Logger.severity.ERROR);
 					}
 				return;
@@ -742,12 +753,12 @@ namespace Rynchodon.Update
 						Characters.Remove(alsoChar.EntityId);
 				};
 
-				myLogger.debugLog("adding character: " + entity.getBestName());
+				Log.DebugLog("adding character: " + entity.getBestName());
 				foreach (var constructor in CharacterScriptConstructors)
 					try { constructor.Invoke(asCharacter); }
 					catch (Exception ex)
 					{
-						myLogger.alwaysLog("Exception in character constructor: " + ex, Logger.severity.ERROR);
+						Log.AlwaysLog("Exception in character constructor: " + ex, Logger.severity.ERROR);
 						Logger.DebugNotify("Exception in character constructor", 10000, Logger.severity.ERROR);
 					}
 				return;
@@ -755,7 +766,7 @@ namespace Rynchodon.Update
 		}
 
 		private void Grid_OnBlockAdded(IMySlimBlock block)
-		{ AddRemoveActions.Enqueue(() => { AddBlock(block); }); }
+		{ AddRemoveActions.AddTail(() => { AddBlock(block); }); }
 
 		/// <summary>
 		/// if necessary, builds script for a block
@@ -774,14 +785,14 @@ namespace Rynchodon.Update
 
 				MyObjectBuilderType typeId = fatblock.BlockDefinition.TypeId;
 
-				//myLogger.debugLog("block definition: " + fatblock.DefinitionDisplayNameText + ", typeId: " + typeId, "AddBlock()"); // used to find which builder is associated with a block
+				//Log.DebugLog("block definition: " + fatblock.DefinitionDisplayNameText + ", typeId: " + typeId, "AddBlock()"); // used to find which builder is associated with a block
 
 				if (AllBlockScriptConstructors.ContainsKey(typeId))
 					foreach (Action<IMyCubeBlock> constructor in BlockScriptConstructor(typeId))
 						try { constructor.Invoke(fatblock); }
 						catch (Exception ex)
 						{
-							myLogger.alwaysLog("Exception in " + typeId + " constructor: " + ex, Logger.severity.ERROR);
+							Log.AlwaysLog("Exception in " + typeId + " constructor: " + ex, Logger.severity.ERROR);
 							Logger.DebugNotify("Exception in " + typeId + " constructor", 10000, Logger.severity.ERROR);
 						}
 
@@ -790,7 +801,7 @@ namespace Rynchodon.Update
 						try { constructor.Invoke(fatblock); }
 						catch (Exception ex)
 						{
-							myLogger.alwaysLog("Exception in every block constructor: " + ex, Logger.severity.ERROR);
+							Log.AlwaysLog("Exception in every block constructor: " + ex, Logger.severity.ERROR);
 							Logger.DebugNotify("Exception in every block constructor", 10000, Logger.severity.ERROR);
 						}
 
@@ -803,39 +814,51 @@ namespace Rynchodon.Update
 		/// </summary>
 		private void Grid_OnClosing(IMyEntity gridAsEntity)
 		{
-			myLogger.debugLog("entered Grid_OnClosing(): " + gridAsEntity.getBestName());
+			// Log may be null, so log with Logger...
+
 			IMyCubeGrid asGrid = gridAsEntity as IMyCubeGrid;
 			asGrid.OnBlockAdded -= Grid_OnBlockAdded;
 			asGrid.OnClosing -= Grid_OnClosing;
-			myLogger.debugLog("leaving Grid_OnClosing(): " + gridAsEntity.getBestName());
 		}
 
 		#endregion
+
+		public override void SaveData()
+		{
+			AttributeFinder.InvokeMethodsWithAttribute<OnWorldSave>();
+		}
 
 		protected override void UnloadData()
 		{
 			base.UnloadData();
 			if (MyAPIGateway.Entities != null)
+			{
 				MyAPIGateway.Entities.OnEntityAdd -= Entities_OnEntityAdd;
+				MyAPIGateway.Entities.OnCloseAll -= UnloadData;
+			}
+
+			if (!Globals.WorldClosed)
+			{
+				MainLock.MainThread_ReleaseExclusive();
+				try
+				{
+					AttributeFinder.InvokeMethodsWithAttribute<OnWorldClose>();
+				}
+				catch (Exception ex)
+				{
+					// if world is closed by X button, expect an exception
+					Log.AlwaysLog("Exception while unloading: " + ex, Logger.severity.ERROR);
+				}
+				Globals.WorldClosed = true;
+				Profiler.Write();
+			}
+
+			// in case SE doesn't clean up properly, clear all fields
+			foreach (FieldInfo field in GetType().GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+				if (!field.IsLiteral && !field.IsInitOnly)
+					field.SetValue(this, null);
 
 			ManagerStatus = Status.Terminated;
-
-			UpdateRegistrar = null;
-			AllBlockScriptConstructors = null;
-			EveryBlockScriptConstructors = null;
-			CharacterScriptConstructors = null;
-			GridScriptConstructors = null;
-
-			playersAPI = null;
-			playersCached = null;
-
-			AddRemoveActions = null;
-			CubeBlocks = null;
-			Characters = null;
-
-			Instance = null;
-
-			Profiler.Write();
 		}
 
 		/// <summary>
