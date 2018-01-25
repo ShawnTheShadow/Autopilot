@@ -8,26 +8,26 @@ depending on their radar signature and distance. Radar information is
 distributed across antenna networks.
 
 Please see the [steam page]
-(http://steamcommunity.com/sharedfiles/filedetails/?id=363880940) for a full
+(Removed by original author)  for a full
 feature list.
 
 ## Getting started
 If you'd simply like to use the mod, please subscribe to it via the Steam
-Workshop as you normally would and download [Load-ARMS](https://github.com/Rynchodon/Load-ARMS) and follow the readme instructions.
+Workshop as you normally would and download [Load-ARMS](https://github.com/ShawnTheShadow/SpaceEngineersPluginLoader) and follow the readme instructions.
 
 To work with a local development copy of this mod instead, follow the steps
-listed [on the wiki](https://github.com/Rynchodon/Autopilot/wiki/Developing-Autopilot).
+listed [on the wiki](https://github.com/ShawnTheShadow/Autopilot/wiki/Developing-Autopilot).
 
 ## Roadmap
 
 Please see the [steam page]
-(http://steamcommunity.com/sharedfiles/filedetails/?id=363880940) for the
+(Removed by original author) for the
 current Roadmap.
 
 ## Contributing
 
 Please submit bug reports and feature requests on the [steam page]
-(http://steamcommunity.com/sharedfiles/filedetails/?id=363880940) and its related
+(Removed by original author) and its related
 discussions.
 
 ## License
