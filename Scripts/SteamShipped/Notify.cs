@@ -24,7 +24,7 @@ namespace SteamShipped
 
 			HasNotified = true;
 
-			MyAPIGateway.Utilities.ShowNotification("ARMS needs Load-ARMS to run, see the steam page for download link", 60000);
+			MyAPIGateway.Utilities.ShowNotification("ARMS needs Space Engineers Plugin Loader to run, see the steam page for download link", 60000);
 			MyAPIGateway.Session.UnregisterComponent(this);
 		}
 

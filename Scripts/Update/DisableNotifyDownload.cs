@@ -15,7 +15,7 @@ namespace Rynchodon.Update
 		private static void Load()
 		{
 			foreach (MyObjectBuilder_Checkpoint.ModItem mod in MyAPIGateway.Session.Mods)
-				if (mod.PublishedFileId == 363880940uL || mod.Name == "ARMS")
+				if (mod.PublishedFileId == 1286147283uL || mod.Name == "ARMS")
 				{
 					Logger.DebugLog("ARMS mod: FriendlyName: " + mod.FriendlyName + ", Name: " + mod.Name + ", Published ID: " + mod.PublishedFileId);
 					MySessionComponentBase component = Mods.FindModSessionComponent(mod.Name, "SteamShipped", "SteamShipped.Notify");
