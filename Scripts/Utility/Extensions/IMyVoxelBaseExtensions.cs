@@ -22,16 +22,17 @@ namespace Rynchodon
 			if (voxel.Storage.Intersect(ref localBox) == ContainmentType.Disjoint)
 				return false;
 
-			return voxel.Storage.Geometry.Intersects(ref localSphere) || checkContains && HasContentAt(voxel, ref localSphere.Center);
+			return voxel.Storage.GetGeometry().Intersects(ref localSphere) || checkContains && HasContentAt(voxel, ref localSphere.Center);
 		}
 
 		private static bool HasContentAt(this MyVoxelBase voxel, ref Vector3D localPosition)
 		{
 			Vector3I voxelCoord;
-			MyVoxelCoordSystems.LocalPositionToVoxelCoord(ref localPosition, out voxelCoord);
+			Vector3 localPosition2 = (Vector3) localPosition;
+			MyVoxelCoordSystems.LocalPositionToVoxelCoord(ref localPosition2, out voxelCoord);
 			MyStorageData cache = new MyStorageData();
 			cache.Resize(Vector3I.One);
-			voxel.Storage.ReadRange(cache, MyStorageDataTypeFlags.Content, 0, ref voxelCoord, ref voxelCoord);
+			voxel.Storage.ReadRange(cache, MyStorageDataTypeFlags.Content, 0, voxelCoord, voxelCoord);
 			return cache.Content(0) > MyVoxelConstants.VOXEL_ISO_LEVEL;
 		}
 

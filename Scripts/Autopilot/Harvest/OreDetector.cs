@@ -165,7 +165,7 @@ namespace Rynchodon.Autopilot.Harvest
 			{
 				foreach (Vector3I intPos in localPositions.OrderBy(obj => Globals.Random.NextDouble()))
 				{
-					Vector3D localPosition = intPos << QUERY_LOD;
+					Vector3 localPosition = intPos << QUERY_LOD;
 					Vector3D worldPosition;
 					MyVoxelCoordSystems.LocalPositionToWorldPosition(m_voxel.PositionLeftBottomCorner, ref localPosition, out worldPosition);
 					yield return worldPosition;
