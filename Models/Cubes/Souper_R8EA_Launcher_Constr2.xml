@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Model Name="R8EA_Launcher">
-	<Parameter Name="RescaleFactor">1.0</Parameter>
+	<Parameter Name="RescaleFactor">0.01</Parameter>
 	<Parameter Name="RescaleToLengthInMeters">false</Parameter>
 	<Parameter Name="Centered">false</Parameter>
 	<Parameter Name="SpecularPower">11.1</Parameter>
@@ -12,11 +12,11 @@
 		<Parameter Name="DiffuseColorX">255</Parameter>
 		<Parameter Name="DiffuseColorY">255</Parameter>
 		<Parameter Name="DiffuseColorZ">255</Parameter>
-		<Parameter Name="DiffuseTexture">Textures\Models\Cubes\largebattery_me.dds</Parameter>
-		<Parameter Name="NormalTexture">Textures\Models\Cubes\largebattery_ns.dds</Parameter>
+		<!--material has no DiffuseTexture-->
+		<!--material has no NormalTexture-->
 		<Parameter Name="ColorMetalTexture">Textures\Models\Cubes\largebattery_cm.dds</Parameter>
-		<Parameter Name="NormalGlossTexture">Textures\Models\Cubes\largebattery_ng.dds</Parameter>
-		<Parameter Name="AddMapsTexture">Textures\Models\Cubes\largebattery_add.dds</Parameter>
+		<Parameter Name="NormalGlossTexture">textures\Cubes\largebattery_ng.dds</Parameter>
+		<Parameter Name="AddMapsTexture">textures\Cubes\largebattery_add.dds</Parameter>
 		<!--material has no AlphamaskTexture-->
 	</Material>
 </Model>
