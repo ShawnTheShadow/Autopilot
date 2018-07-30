@@ -125,14 +125,14 @@ namespace Rynchodon.Autopilot.Pathfinding
 		/// <summary>Nodes that have been reached that are not near anything.</summary>
 		public List<Vector3D> m_blueSkyNodes;
 		public bool Failed { get { return NodeDistance == MinNodeDistance && m_openNodes.Count == 0; } }
-		private Logable Log {
+		/*private Logable Log {
 			get {
 				return new Logable(
 					ResourcePool<FindingSet>.InstancesCreated.ToString(),
 					m_referencePosition.ToString() + ":" + m_startPosition.ToString(),
 					string.Concat(m_blueSkyNodes.Count, ':', m_reachedNodes.Count, ':', m_openNodes.Count));
 			}
-		}
+		}*/
 #if PROFILE
 			public int m_unreachableNodes;
 #endif
@@ -208,7 +208,7 @@ namespace Rynchodon.Autopilot.Pathfinding
 				maxNodeDistance = MinNodeDistance;
 			while (NodeDistance > maxNodeDistance)
 				NodeDistance = NodeDistance >> 1;
-			Log.DebugLog("Finished setup. reference: " + reference + ", start: " + start + ", NodeDistance: " + NodeDistance, Logger.severity.DEBUG);
+			//Log.DebugLog("Finished setup. reference: " + reference + ", start: " + start + ", NodeDistance: " + NodeDistance, Logger.severity.DEBUG);
 		}
 
 		/// <summary>
@@ -236,12 +236,12 @@ namespace Rynchodon.Autopilot.Pathfinding
 			if (halve)
 			{
 				NodeDistance = NodeDistance >> 1;
-				Log.DebugLog("Halved node distance, now: " + NodeDistance);
+				//Log.DebugLog("Halved node distance, now: " + NodeDistance);
 			}
 			else
 			{
 				NodeDistance = NodeDistance << 1;
-				Log.DebugLog("Doubled node distance, now: " + NodeDistance);
+				//Log.DebugLog("Doubled node distance, now: " + NodeDistance);
 			}
 
 			foreach (PathNode reachedNode in m_reachedNodes.Values)
@@ -303,7 +303,7 @@ namespace Rynchodon.Autopilot.Pathfinding
 			VectorExtensions.RoundTo(ref finishToPosition, NodeDistance);
 			Vector3D.Add(ref m_referencePosition, ref finishToPosition, out position);
 
-			Log.DebugLog("m_reachedNodes == null", Logger.severity.FATAL, condition: m_reachedNodes == null);
+			//Log.DebugLog("m_reachedNodes == null", Logger.severity.FATAL, condition: m_reachedNodes == null);
 
 			if (m_reachedNodes.ContainsKey(position.GetHash()))
 			{

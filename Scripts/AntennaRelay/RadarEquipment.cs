@@ -265,7 +265,8 @@ namespace Rynchodon.AntennaRelay
 
 		static RadarEquipment()
 		{
-			_blockLimit = MySession.Static.EnableBlockLimits ? MySession.Static.MaxGridSize : 50000;
+			_blockLimit = 50000;
+			
 			_maxRCS = SphereCrossSection(_blockLimit * 2.5f * 2.5f * 2.5f);
 			if (MyBeacon__m_light == null)
 				throw new NullReferenceException("MyBeacon__m_light");

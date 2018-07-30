@@ -29,13 +29,13 @@ namespace Rynchodon
 
 		public static T Get()
 		{
-			CheckInstancesCreated();
+			//CheckInstancesCreated();
 			return Pool.Get();
 		}
 
 		public static void Return(T item)
 		{
-			CheckInstancesCreated();
+			//CheckInstancesCreated();
 			CheckCleared(item);
 			Pool.Return(item);
 		}
@@ -45,7 +45,7 @@ namespace Rynchodon
 			get { return Pool.Count; }
 		}
 
-		public static int InstancesCreated
+		/*public static int InstancesCreated
 		{
 			get { return Pool.InstancesCreated; }
 		}
@@ -61,7 +61,7 @@ namespace Rynchodon
 				Logger.DebugLogCallStack();
 			}
 #endif
-		}
+		}*/
 
 		[System.Diagnostics.Conditional("DEBUG")]
 		private static void CheckCleared(T item)

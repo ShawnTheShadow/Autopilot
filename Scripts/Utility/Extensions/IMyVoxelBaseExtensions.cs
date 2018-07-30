@@ -1,4 +1,4 @@
-﻿using Sandbox.Game.Entities;
+using Sandbox.Game.Entities;
 using Sandbox.Engine.Voxels;
 using VRageMath;
 using VRage.Voxels;
@@ -21,8 +21,9 @@ namespace Rynchodon
 			BoundingBox localBox = BoundingBox.CreateFromSphere(localSphere);
 			if (voxel.Storage.Intersect(ref localBox) == ContainmentType.Disjoint)
 				return false;
+			BoundingSphere localSphereD = new BoundingSphere(localSphere.Center, (float)localSphere.Radius);
 
-			return voxel.Storage.GetGeometry().Intersects(ref localSphere) || checkContains && HasContentAt(voxel, ref localSphere.Center);
+			return voxel.Storage.GetGeometry().Intersects(ref localSphereD) || checkContains && HasContentAt(voxel, ref localSphere.Center);
 		}
 
 		private static bool HasContentAt(this MyVoxelBase voxel, ref Vector3D localPosition)
