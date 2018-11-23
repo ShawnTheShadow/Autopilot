@@ -612,7 +612,7 @@ namespace Rynchodon.Weapons.Guided
 		{
 			DestroyAllNearbyMissiles();
 			//((MyAmmoBase)MyEntity).Explode();
-			((MyAmmoBase)MyEntity).MarkForExplosion();
+			((MyAmmoBase)MyEntity).MarkForDestroy();
 		}
 
 		/// <summary>
@@ -634,7 +634,7 @@ namespace Rynchodon.Weapons.Guided
 				{
 					Log.DebugLog("Explode: " + entity + ", position: " + entity.PositionComp.GetPosition());
 					//((MyAmmoBase)entity).Explode();
-					((MyAmmoBase)entity).MarkForExplosion();
+					((MyAmmoBase)entity).MarkForDestroy();
 				}
 
 			explosion.Radius *= 10f;
