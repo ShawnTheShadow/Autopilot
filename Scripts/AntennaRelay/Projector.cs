@@ -759,7 +759,7 @@ namespace Rynchodon.AntennaRelay
 			builder.EnableSmallToLargeConnections = false;
 
 			Profiler.StartProfileBlock("CreateHolo.CreateFromObjectBuilder");
-			MyCubeGrid holo = (MyCubeGrid)MyEntities.CreateFromObjectBuilder(builder);
+			MyCubeGrid holo = (MyCubeGrid)MyEntities.CreateFromObjectBuilder(builder, true);
 			Profiler.EndProfileBlock();
 
 			Profiler.StartProfileBlock("CreateHolo.SetupProjection");

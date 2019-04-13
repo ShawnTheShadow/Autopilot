@@ -279,28 +279,28 @@ namespace Rynchodon.AntennaRelay
 
 				// we do not display if it is broadcasting so there is no reason to use LastSeen.HostileName()
 				string name;
-				MyRelationsBetweenPlayerAndBlock seRelate;
+				//MyRelationsBetweenPlayerAndBlock seRelate;
 				switch (setting)
 				{
 					case UserSettings.ByteSettingName.FactionOnHUD:
 						name = seen.Entity.DisplayName;
-						seRelate = MyRelationsBetweenPlayerAndBlock.FactionShare;
+						//seRelate = MyRelationsBetweenPlayerAndBlock.FactionShare;
 						break;
 					case UserSettings.ByteSettingName.OwnerOnHUD:
 						name = seen.Entity.DisplayName;
-						seRelate = MyRelationsBetweenPlayerAndBlock.Owner;
+						//seRelate = MyRelationsBetweenPlayerAndBlock.Owner;
 						break;
 					case UserSettings.ByteSettingName.MissileOnHUD:
 						name = "Missile " + index;
-						seRelate = MyRelationsBetweenPlayerAndBlock.Enemies;
+						//seRelate = MyRelationsBetweenPlayerAndBlock.Enemies;
 						break;
 					case UserSettings.ByteSettingName.NeutralOnHUD:
 						name = "Neutral " + index;
-						seRelate = MyRelationsBetweenPlayerAndBlock.Neutral;
+						//seRelate = MyRelationsBetweenPlayerAndBlock.Neutral;
 						break;
 					case UserSettings.ByteSettingName.EnemiesOnHUD:
 						name = "Enemy " + index;
-						seRelate = MyRelationsBetweenPlayerAndBlock.Enemies;
+						//seRelate = MyRelationsBetweenPlayerAndBlock.Enemies;
 						break;
 					default:
 						Log.AlwaysLog("case not implemented: " + setting, Logger.severity.ERROR);

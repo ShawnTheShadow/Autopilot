@@ -464,7 +464,7 @@ namespace Rynchodon.Autopilot.Harvest
 		/// <param name="position">Position of autopilot block</param>
 		/// <param name="oreType">Ore types to search for</param>
 		/// <param name="onComplete">Invoked iff an ore is found</param>
-		/// <returns>true iff an ore is found</returns>
+		/// <returns>true if an ore is found</returns>
 		private bool GetOreLocations(Vector3D position, byte[] oreType, OreSearchComplete onComplete)
 		{
 			Log.DebugLog("entered GetOreLocations()");

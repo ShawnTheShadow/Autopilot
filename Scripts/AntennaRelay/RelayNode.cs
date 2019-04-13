@@ -1,6 +1,6 @@
-#if DEBUG
-#define TRACE
-#endif
+//#if DEBUG
+//#define TRACE
+//#endif
 
 using System;
 using System.Collections.Generic;

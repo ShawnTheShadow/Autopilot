@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text.RegularExpressions;
 using Rynchodon.Autopilot.Instruction.Command;
 using Sandbox.ModAPI;

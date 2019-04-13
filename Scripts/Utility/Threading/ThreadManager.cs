@@ -67,9 +67,15 @@ namespace Rynchodon.Threading
 				}
 
 				if (Background)
+				{
+					//Log.DebugLog(("Background == True"), Logger.severity.DEBUG);
 					MyAPIGateway.Parallel.StartBackground(Run);
+				}
 				else
+				{
+					//Log.DebugLog("Running in parallel with game thread", Logger.severity.DEBUG);
 					MyAPIGateway.Parallel.Start(Run);
+				}
 			});
 		}
 

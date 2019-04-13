@@ -98,7 +98,7 @@ namespace Rynchodon.Autopilot.Navigator
 
 			this.m_grid.GetBlocks_Safe(null, slim => {
 				MyEntity entity = slim.FatBlock as MyEntity;
-				if (entity != null && entity is Sandbox.ModAPI.Ingame.IMyCargoContainer)
+				if (entity != null && entity is Sandbox.ModAPI.IMyCargoContainer)
 				{
 					Log.DebugLog("entity: " + entity.GetBaseEntity().getBestName() + ", inventories: " + entity.InventoryCount);
 					int count = entity.InventoryCount;
@@ -127,7 +127,7 @@ namespace Rynchodon.Autopilot.Navigator
 		{
 			Log.DebugLog("looking for attached blocks");
 
-			foreach (MyEntity entity in Attached.AttachedGrid.AttachedCubeBlocks(this.m_grid, Attached.AttachedGrid.AttachmentKind.Terminal, false))
+			foreach (MyCubeBlock entity in Attached.AttachedGrid.AttachedCubeBlocks(m_grid, Attached.AttachedGrid.AttachmentKind.Terminal, false))
 				if (entity.HasInventory && (entity.GetInventory(0) as IMyInventory).IsConnectedTo(m_destInventory[0]))
 				{
 					Log.DebugLog("entity: " + entity.GetBaseEntity().getBestName() + ", inventories: " + entity.InventoryCount);
@@ -142,7 +142,7 @@ namespace Rynchodon.Autopilot.Navigator
 		/// </summary>
 		private void Return()
 		{
-			float allowedVolume = maxTransfer; // volume is in m³ not l
+			float allowedVolume = maxTransfer; // volume is in mÂ³ not l
 
 			foreach (IMyInventory sourceInv in m_destInventory)
 				if (sourceInv.CurrentVolume > MyFixedPoint.Zero)
@@ -196,7 +196,7 @@ namespace Rynchodon.Autopilot.Navigator
 		/// </summary>
 		private void Shop()
 		{
-			float allowedVolume = maxTransfer; // volume is in m³ not l
+			float allowedVolume = maxTransfer; // volume is in mÂ³ not l
 
 			var component = m_shoppingList.FirstPair();
 			//Log.DebugLog("shopping for " + component.Key, "Move()");
