@@ -1,0 +1,16 @@
+{
+  "assetFileName": "ARMS.zip",
+  "fileRequirements": [
+    null,
+    null,
+    null,
+    null
+  ],
+  "files": [
+    "ARMS.dll",
+    "README.md",
+    "LICENSE",
+    "Manifest.json"
+  ],
+  "requiredPlugins": null
+}

@@ -8,6 +8,8 @@ VersionInfo - User.cs
 *.tmp*
 **/mwmBuilder/
 **/MwmBuilder.log
+Scripts/packages
+.idea
 
 #################
 ## Eclipse

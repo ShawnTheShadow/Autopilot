@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Model Name="Cruise_Missile_Launcher">
+	<Parameter Name="RescaleFactor">0.01</Parameter>
+	<Parameter Name="RescaleToLengthInMeters">false</Parameter>
+	<Parameter Name="Centered">false</Parameter>
+	<Parameter Name="SpecularPower">0.0</Parameter>
+	<Parameter Name="SpecularShininess">0.0</Parameter>
+	<Material Name="Missile">
+		<Parameter Name="Technique">MESH</Parameter>
+		<Parameter Name="SpecularIntensity">0.0</Parameter>
+		<Parameter Name="SpecularPower">0.0</Parameter>
+		<Parameter Name="DiffuseColorX">255</Parameter>
+		<Parameter Name="DiffuseColorY">255</Parameter>
+		<Parameter Name="DiffuseColorZ">255</Parameter>
+		<!--material has no DiffuseTexture-->
+		<!--material has no NormalTexture-->
+		<Parameter Name="ColorMetalTexture">textures\Cubes\largebattery_cm.dds</Parameter>
+		<Parameter Name="NormalGlossTexture">textures\Cubes\largebattery_ng.dds</Parameter>
+		<Parameter Name="AddMapsTexture">textures\Cubes\largebattery_add.dds</Parameter>
+		<!--material has no AlphamaskTexture-->
+	</Material>
+</Model>

@@ -1,0 +1,19 @@
+{
+  "author": "ShawnTheShadow",
+  "files": [
+    {
+      "source": "ARMS.dll"
+    },
+    {
+      "source": "..\\README.md"
+    },
+    {
+      "source": "..\\LICENSE"
+    }
+  ],
+  "release": {
+    "draft": true,
+    "prerelease": false
+  },
+  "repository": "Autopilot"
+}

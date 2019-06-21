@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CoverageSession xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Summary numSequencePoints="0" visitedSequencePoints="0" numBranchPoints="0" visitedBranchPoints="0" sequenceCoverage="0" branchCoverage="0" maxCyclomaticComplexity="0" minCyclomaticComplexity="0" visitedClasses="0" numClasses="0" visitedMethods="0" numMethods="0" />
+  <Modules>
+    <Module skippedDueTo="Filter" hash="CB-F2-C8-9D-8E-D0-0B-6E-DF-EE-0E-36-D8-59-75-C2-9F-3C-0C-39">
+      <ModulePath>C:\WINDOWS\Microsoft.Net\assembly\GAC_32\mscorlib\v4.0_4.0.0.0__b77a5c561934e089\mscorlib.dll</ModulePath>
+      <ModuleTime>2018-02-03T07:53:07.8821137Z</ModuleTime>
+      <ModuleName>mscorlib</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="51-57-32-32-3A-99-BE-2D-0F-55-8E-53-39-A1-87-44-A4-8F-7F-96">
+      <ModulePath>C:\VC12\Common7\IDE\MSTest.exe</ModulePath>
+      <ModuleTime>2013-10-05T07:38:22Z</ModuleTime>
+      <ModuleName>MSTest</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="10-BE-EA-30-C3-00-88-66-22-63-D4-22-A3-D9-F5-78-73-56-91-07">
+      <ModulePath>C:\WINDOWS\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.Common\12.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.Common.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:07.5970592Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.Common</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="CD-AD-8B-C2-08-DE-43-52-19-DC-E9-FA-97-6A-0C-57-9E-78-7A-D0">
+      <ModulePath>C:\WINDOWS\Microsoft.Net\assembly\GAC_MSIL\System\v4.0_4.0.0.0__b77a5c561934e089\System.dll</ModulePath>
+      <ModuleTime>2018-02-03T07:52:58.0062891Z</ModuleTime>
+      <ModuleName>System</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="6C-F3-21-D3-55-B9-65-8F-79-5C-94-83-2B-55-5B-61-F1-44-E2-3D">
+      <ModulePath>C:\WINDOWS\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.ExecutionCommon\12.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.ExecutionCommon.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:09.2841608Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.ExecutionCommon</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="14-3D-05-8D-99-D4-2A-75-D3-21-57-04-93-CD-3F-7B-76-07-28-5E">
+      <ModulePath>C:\WINDOWS\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.Resource\12.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.Resource.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:09.9402595Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.Resource</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="38-C2-E8-49-A0-80-23-53-EB-22-03-35-B3-AA-BB-8B-6E-DC-B1-48">
+      <ModulePath>C:\WINDOWS\Microsoft.Net\assembly\GAC_MSIL\System.Configuration\v4.0_4.0.0.0__b03f5f7f11d50a3a\System.Configuration.dll</ModulePath>
+      <ModuleTime>2018-02-03T07:52:57.7875228Z</ModuleTime>
+      <ModuleName>System.Configuration</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="41-1E-7A-9A-5E-51-87-98-1D-58-3B-D5-81-AA-C2-46-6D-82-D3-76">
+      <ModulePath>C:\WINDOWS\Microsoft.Net\assembly\GAC_MSIL\System.Xml\v4.0_4.0.0.0__b77a5c561934e089\System.Xml.dll</ModulePath>
+      <ModuleTime>2018-02-03T07:52:57.8969054Z</ModuleTime>
+      <ModuleName>System.Xml</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="25-DB-39-AF-D2-EF-C6-D7-46-FB-43-4E-6D-00-CA-60-D2-BC-73-4C">
+      <ModulePath>C:\WINDOWS\Microsoft.Net\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.CommandLine\v4.0_12.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.CommandLine.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:07.3939792Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.CommandLine</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="47-B9-B9-D0-CE-08-BD-2E-D8-CD-8B-08-60-27-F1-A1-4B-22-F1-06">
+      <ModulePath>C:\WINDOWS\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.TMI\12.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.TMI.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:11.3617993Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.TMI</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="DB-0E-4B-7E-32-7F-DC-B9-ED-21-E6-62-0D-C6-EB-C6-56-C3-B8-D1">
+      <ModulePath>C:\WINDOWS\Microsoft.Net\assembly\GAC_32\System.Data\v4.0_4.0.0.0__b77a5c561934e089\System.Data.dll</ModulePath>
+      <ModuleTime>2018-02-03T07:53:07.8352377Z</ModuleTime>
+      <ModuleName>System.Data</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="11-56-8A-66-B9-FD-25-39-6F-E9-91-69-FC-55-66-36-39-1B-7D-D6">
+      <ModulePath>C:\WINDOWS\Microsoft.Net\assembly\GAC_MSIL\System.Numerics\v4.0_4.0.0.0__b77a5c561934e089\System.Numerics.dll</ModulePath>
+      <ModuleTime>2018-02-03T07:52:57.9125316Z</ModuleTime>
+      <ModuleName>System.Numerics</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="D9-23-42-2F-71-9B-17-D6-BB-79-7E-97-17-6B-CA-98-C6-C5-FB-80">
+      <ModulePath>C:\WINDOWS\Microsoft.Net\assembly\GAC_32\System.Web\v4.0_4.0.0.0__b03f5f7f11d50a3a\System.Web.dll</ModulePath>
+      <ModuleTime>2018-02-03T07:53:06.4601119Z</ModuleTime>
+      <ModuleName>System.Web</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="CA-9C-90-99-8B-37-AB-0F-AE-EB-18-58-AB-3A-AE-7B-F4-8C-6B-D1">
+      <ModulePath>C:\WINDOWS\Microsoft.Net\assembly\GAC_MSIL\System.Core\v4.0_4.0.0.0__b77a5c561934e089\System.Core.dll</ModulePath>
+      <ModuleTime>2018-02-03T07:52:59.9595789Z</ModuleTime>
+      <ModuleName>System.Core</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="B8-BD-0B-9C-FE-40-35-92-D1-0C-F8-1C-06-DF-75-D9-6D-4E-B5-9F">
+      <ModulePath>C:\WINDOWS\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.Tips.UnitTest.Tip\12.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.Tips.UnitTest.Tip.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:11.314937Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.Tips.UnitTest.Tip</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="80-91-7B-77-89-19-B3-0A-B9-FD-35-76-4A-23-60-1A-8D-35-58-07">
+      <ModulePath>C:\WINDOWS\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.Tips.UnitTest.ObjectModel\12.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.Tips.UnitTest.ObjectModel.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:11.2055874Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.Tips.UnitTest.ObjectModel</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="9C-BD-10-0D-B6-DF-EE-2B-EB-27-DA-26-68-CD-C4-4A-48-7F-7B-09">
+      <ModulePath>C:\WINDOWS\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.UnitTestFramework\10.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.UnitTestFramework.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:11.4711499Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.UnitTestFramework</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="91-A7-F9-01-20-FA-B7-30-6F-8D-00-4C-1E-EC-D4-8D-65-53-89-BC">
+      <ModulePath>C:\WINDOWS\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.Tips.UnitTest.AssemblyResolver\12.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.Tips.UnitTest.AssemblyResolver.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:11.0337531Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.Tips.UnitTest.AssemblyResolver</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="87-C9-BA-8D-5D-BC-48-A2-9A-EE-A2-4C-0D-24-85-14-7E-47-C9-50">
+      <ModulePath>C:\VC12\Common7\IDE\PrivateAssemblies\Microsoft.VisualStudio.TeamSystem.Licensing.dll</ModulePath>
+      <ModuleTime>2013-10-05T07:38:22Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.TeamSystem.Licensing</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="B8-BD-0B-9C-FE-40-35-92-D1-0C-F8-1C-06-DF-75-D9-6D-4E-B5-9F">
+      <ModulePath>C:\WINDOWS\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.Tips.UnitTest.Tip\12.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.Tips.UnitTest.Tip.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:11.314937Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.Tips.UnitTest.Tip</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="10-BE-EA-30-C3-00-88-66-22-63-D4-22-A3-D9-F5-78-73-56-91-07">
+      <ModulePath>C:\WINDOWS\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.Common\12.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.Common.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:07.5970592Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.Common</ModuleName>
+      <Classes />
+    </Module>
+    <Module skippedDueTo="Filter" hash="80-91-7B-77-89-19-B3-0A-B9-FD-35-76-4A-23-60-1A-8D-35-58-07">
+      <ModulePath>C:\WINDOWS\assembly\GAC_MSIL\Microsoft.VisualStudio.QualityTools.Tips.UnitTest.ObjectModel\12.0.0.0__b03f5f7f11d50a3a\Microsoft.VisualStudio.QualityTools.Tips.UnitTest.ObjectModel.dll</ModulePath>
+      <ModuleTime>2018-02-10T16:49:11.2055874Z</ModuleTime>
+      <ModuleName>Microsoft.VisualStudio.QualityTools.Tips.UnitTest.ObjectModel</ModuleName>
+      <Classes />
+    </Module>
+  </Modules>
+</CoverageSession>
