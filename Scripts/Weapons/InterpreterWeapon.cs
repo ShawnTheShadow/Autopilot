@@ -256,8 +256,8 @@ namespace Rynchodon.Weapons
 
 			Log.TraceLog("Found panel: " + panel.DisplayNameText);
 
-			string panelText = panel.GetPublicText();
-			AddMonitor(panel.GetPublicText);
+			string panelText = panel.GetText();
+			AddMonitor(panel.GetText);
 
 			if (string.IsNullOrWhiteSpace(panelText))
 			{

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Mime;
 using System.Text;
 using System.Xml.Serialization;
 using Rynchodon.Attached;
@@ -13,8 +14,10 @@ using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using VRage.Collections;
 using VRage.Game.ModAPI;
+using VRage.Network;
 using VRage.Utils;
 using VRageMath;
+using ContentType = VRage.Game.GUI.TextPanel.ContentType;
 using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Rynchodon.AntennaRelay
@@ -113,6 +116,7 @@ namespace Rynchodon.AntennaRelay
 		}
 
 		private readonly Ingame.IMyTextPanel m_textPanel;
+		private readonly Ingame.IMyTextSurface m_textSurface;
 
 		private Option m_optionsTerminal;
 
@@ -128,6 +132,7 @@ namespace Rynchodon.AntennaRelay
 			: base(block)
 		{
 			m_textPanel = block as Ingame.IMyTextPanel;
+			m_textSurface = block as Ingame.IMyTextSurface;
 			myTermBlock = block as IMyTerminalBlock;
 			m_networkClient = new RelayClient(block);
 			Log.DebugLog("init: " + m_block.DisplayNameText);
@@ -178,8 +183,9 @@ namespace Rynchodon.AntennaRelay
 
 			if ((m_options & Option.Refresh) != 0)
 			{
-				m_textPanel.ShowTextureOnScreen();
-				m_textPanel.ShowPublicTextOnScreen();
+				//m_textPanel.ShowTextureOnScreen();
+				m_textSurface.ContentType = ContentType.TEXT_AND_IMAGE;
+				//m_textPanel.ShowPublicTextOnScreen();
 			}
 		}
 
@@ -193,7 +199,8 @@ namespace Rynchodon.AntennaRelay
 			RelayStorage store = m_networkClient.GetStorage();
 			if (store == null)
 			{
-				m_textPanel.WritePublicText("No network connection");
+				//m_textPanel.WritePublicText("No network connection");
+				m_textSurface.WriteText("No network connection");
 				return;
 			}
 
@@ -206,7 +213,8 @@ namespace Rynchodon.AntennaRelay
 
 			if (m_sortableList.Count == 0)
 			{
-				m_textPanel.WritePublicText("No entities detected");
+				//m_textPanel.WritePublicText("No entities detected");
+				m_textSurface.WriteText("No entities detected");
 				m_sortableList.Clear();
 				ResourcePool<List<sortableLastSeen>>.Return(m_sortableList);
 				return;
@@ -233,7 +241,8 @@ namespace Rynchodon.AntennaRelay
 			string displayString = displayText.ToString();
 
 			//Log.DebugLog("Writing to panel: " + m_textPanel.DisplayNameText + ":\n\t" + displayString, "Display()", Logger.severity.TRACE);
-			m_textPanel.WritePublicText(displayText.ToString());
+			//m_textPanel.WritePublicText(displayText.ToString());
+			m_textPanel.WriteText(displayText.ToString());
 		}
 
 		private void AllLastSeen(RelayStorage store)
@@ -274,7 +283,8 @@ namespace Rynchodon.AntennaRelay
 			RelayStorage store = m_networkClient.GetStorage();
 			if (store == null)
 			{
-				m_textPanel.WritePublicText("No network connection");
+				//m_textPanel.WritePublicText("No network connection");
+				m_textPanel.WriteText("No Network Connection");
 				return;
 			}
 
@@ -317,7 +327,7 @@ namespace Rynchodon.AntennaRelay
 			string displayString = displayText.ToString();
 
 			//Log.DebugLog("Writing to panel: " + m_textPanel.DisplayNameText + ":\n\t" + displayString, "DisplyAutopilotStatus()", Logger.severity.TRACE);
-			m_textPanel.WritePublicText(displayText.ToString());
+			m_textPanel.WriteText(displayText.ToString());
 		}
 
 		private class sortableLastSeen : IComparable<sortableLastSeen>
